@@ -22,7 +22,10 @@ final class EditorViewController: UIViewController {
 
     // MARK: State
     let project: String
+    let kind: ProjectKind
     let store = ProjectStore.shared
+    var importFolder: String?
+    var isGameRunning = false
 
     var currentPath: String?
     var canEdit = true
@@ -58,6 +61,7 @@ final class EditorViewController: UIViewController {
     // MARK: Init
     init(project: String) {
         self.project = project
+        self.kind = ProjectStore.shared.kind(of: project)
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -116,9 +120,15 @@ final class EditorViewController: UIViewController {
         let save = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"),
                                    style: .plain, target: self, action: #selector(saveTapped))
         langItem = UIBarButtonItem(title: language.displayName, image: nil, primaryAction: nil, menu: nil)
-        let run = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
-                                  style: .plain, target: self, action: #selector(runTapped))
-        navigationItem.rightBarButtonItems = [run, gear, save, langItem]
+        let log = UIBarButtonItem(image: UIImage(systemName: "text.alignleft"),
+                                  style: .plain, target: self, action: #selector(logTapped))
+        var items = [gear, save, langItem!]
+        if kind.canRun {
+            let run = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
+                                      style: .plain, target: self, action: #selector(runTapped))
+            items = [run, log] + items
+        }
+        navigationItem.rightBarButtonItems = items
         rebuildLanguageMenu()
     }
 
@@ -216,7 +226,7 @@ final class EditorViewController: UIViewController {
     func openFile(_ path: String) {
         flushSave()
         currentPath = path
-        if let text = store.read(project: project, path: path) {
+        if store.isTextFile(project: project, path: path), let text = store.read(project: project, path: path) {
             canEdit = true
             language = Language.detect(path)
             textView.isEditable = true
@@ -225,7 +235,7 @@ final class EditorViewController: UIViewController {
             canEdit = false
             language = .plaintext
             textView.isEditable = false
-            textView.text = "Không đọc được file này (không phải văn bản UTF-8)."
+            textView.text = "File này không phải văn bản nên không mở để sửa được\n(ảnh, âm thanh, font... vẫn dùng được trong game)."
         }
         isDirty = false
         textView.selectedRange = NSRange(location: 0, length: 0)
@@ -286,9 +296,16 @@ final class EditorViewController: UIViewController {
         if flushSave() { flash("✓ Đã lưu \(currentPath ?? "")") }
     }
 
+    @objc private func logTapped() {
+        textView.resignFirstResponder()
+        let nav = UINavigationController(rootViewController: LogViewController())
+        present(nav, animated: true)
+    }
+
     /// Chạy dự án bằng lõi LÖVE. Chặn tại đây tới khi game thoát, rồi quay lại editor.
+    /// Trong lúc chạy có cửa sổ nổi với nút Log / Thoát; log của game được lưu vào GameLog.
     @objc private func runTapped() {
-        guard flushSave() else { return }
+        guard !isGameRunning, flushSave() else { return }
         #if CATNIP_HAS_LOVE
         guard store.read(project: project, path: "main.lua") != nil else {
             flash("⚠️ Dự án cần có file main.lua để chạy")
@@ -297,11 +314,22 @@ final class EditorViewController: UIViewController {
         textView.resignFirstResponder()
         let path = store.projectURL(project).path
         let window = view.window
+        isGameRunning = true
         flash("▶︎ Đang chạy…")
-        // Chạy ở lượt sau để thanh trạng thái kịp cập nhật trước khi LÖVE chiếm vòng lặp.
+
+        GameLog.shared.clear()
+        CatnipLove.logHandler = { GameLog.shared.append($0) }
+        CatnipLove.startLogCapture()
+        GameRunOverlay.show { CatnipLove.requestQuit() }
+
+        // Chạy ở lượt sau để giao diện kịp cập nhật trước khi LÖVE chiếm vòng lặp.
         DispatchQueue.main.async { [weak self] in
             let code = CatnipLove.runGame(atPath: path)
+            CatnipLove.stopLogCapture()
+            CatnipLove.logHandler = nil
+            GameRunOverlay.hide()
             window?.makeKeyAndVisible()
+            self?.isGameRunning = false
             self?.flash(code == 0 ? "■ Game đã thoát" : "■ Game thoát với mã \(code)")
         }
         #else
@@ -345,7 +373,7 @@ final class EditorViewController: UIViewController {
         textView.alwaysBounceHorizontal = !st.wrapLines
 
         gutter.isHidden = !st.showLineNumbers
-        gutter.font = .monospacedSystemFont(ofSize: max(Appearance.fontSize - 2, 9), weight: .regular)
+        gutter.font = .monospacedSystemFont(ofSize: max(Appearance.fontSize - 2, 2), weight: .regular)
         gutter.textColor = t.mutedColor
         gutter.lineColor = t.borderColor
         gutter.backgroundColor = t.bg2Color

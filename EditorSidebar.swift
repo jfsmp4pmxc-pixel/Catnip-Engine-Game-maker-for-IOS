@@ -18,6 +18,7 @@
 //   
 
 import UIKit
+import UniformTypeIdentifiers
 
 extension EditorViewController {
 
@@ -79,6 +80,8 @@ extension EditorViewController {
 
         let newFile = headerButton("doc.badge.plus") { [weak self] in self?.newFilePrompt(in: nil) }
         let newFolder = headerButton("folder.badge.plus") { [weak self] in self?.newFolderPrompt(in: nil) }
+        let importBtn = headerButton("square.and.arrow.down.on.square") { [weak self] in self?.importFiles(into: nil) }
+        sidebarHeader.addSubview(importBtn)
         sidebarHeader.addSubview(newFile)
         sidebarHeader.addSubview(newFolder)
 
@@ -111,12 +114,14 @@ extension EditorViewController {
 
             sidebarTitle.leadingAnchor.constraint(equalTo: sidebarHeader.leadingAnchor, constant: 14),
             sidebarTitle.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
-            sidebarTitle.trailingAnchor.constraint(lessThanOrEqualTo: newFile.leadingAnchor, constant: -8),
+            sidebarTitle.trailingAnchor.constraint(lessThanOrEqualTo: importBtn.leadingAnchor, constant: -8),
 
             newFolder.trailingAnchor.constraint(equalTo: sidebarHeader.trailingAnchor, constant: -6),
             newFolder.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
             newFile.trailingAnchor.constraint(equalTo: newFolder.leadingAnchor),
             newFile.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
+            importBtn.trailingAnchor.constraint(equalTo: newFile.leadingAnchor),
+            importBtn.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
 
             fileTable.topAnchor.constraint(equalTo: sidebarHeader.bottomAnchor),
             fileTable.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
@@ -169,6 +174,16 @@ extension EditorViewController {
                 self.sidebar.isHidden = true
             }
         })
+    }
+
+    // MARK: Nhập file từ bên ngoài (assets, âm thanh, font...)
+
+    func importFiles(into folder: String?) {
+        importFolder = folder
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        picker.allowsMultipleSelection = true
+        picker.delegate = self
+        present(picker, animated: true)
     }
 
     // MARK: Thao tác với file / thư mục
@@ -274,7 +289,7 @@ extension EditorViewController: UITableViewDataSource, UITableViewDelegate {
 
         let symbol: String
         if e.isFolder { symbol = expanded.contains(e.path) ? "folder.fill" : "folder" }
-        else { symbol = "doc.text" }
+        else { symbol = Self.symbol(forFile: e.name) }
         cfg.image = UIImage(systemName: symbol)
         cfg.imageProperties.tintColor = e.isFolder ? t.accentColor : t.mutedColor
         cfg.imageToTextPadding = 8
@@ -325,6 +340,9 @@ extension EditorViewController: UITableViewDataSource, UITableViewDelegate {
                 items.append(UIAction(title: "Thư mục con mới", image: UIImage(systemName: "folder.badge.plus")) { _ in
                     self?.newFolderPrompt(in: e.path)
                 })
+                items.append(UIAction(title: "Nhập file vào đây", image: UIImage(systemName: "square.and.arrow.down")) { _ in
+                    self?.importFiles(into: e.path)
+                })
             }
             items.append(UIAction(title: "Đổi tên", image: UIImage(systemName: "pencil")) { _ in
                 self?.renameEntry(e)
@@ -334,5 +352,56 @@ extension EditorViewController: UITableViewDataSource, UITableViewDelegate {
             })
             return UIMenu(children: items)
         }
+    }
+}
+
+// MARK: - Biểu tượng theo loại file
+
+extension EditorViewController {
+    static func symbol(forFile name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "png","jpg","jpeg","gif","bmp","tga","webp","ico","dds","hdr": return "photo"
+        case "wav","mp3","ogg","oga","flac","m4a","aac":                   return "music.note"
+        case "mod","xm","it","s3m":                                        return "music.quarternote.3"
+        case "ttf","otf","ttc","woff","woff2","fnt":                       return "textformat"
+        case "lua":                                                        return "chevron.left.forwardslash.chevron.right"
+        case "love","zip","gz","7z","rar":                                 return "archivebox"
+        default:                                                           return "doc.text"
+        }
+    }
+}
+
+// MARK: - Chọn file để nhập
+
+extension EditorViewController: UIDocumentPickerDelegate {
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        let folder = importFolder
+        importFolder = nil
+        var imported: [String] = []
+        var failed: [String] = []
+
+        for url in urls {
+            let scoped = url.startAccessingSecurityScopedResource()
+            defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+            do {
+                imported.append(try store.importFile(project: project, from: url, toFolder: folder))
+            } catch {
+                failed.append(url.lastPathComponent)
+            }
+        }
+
+        if let f = folder { expanded.insert(f); saveExpanded() }
+        reloadTree()
+
+        if failed.isEmpty {
+            flash("✓ Đã nhập \(imported.count) file")
+        } else {
+            flash("⚠️ Nhập lỗi: " + failed.joined(separator: ", "))
+        }
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        importFolder = nil
     }
 }

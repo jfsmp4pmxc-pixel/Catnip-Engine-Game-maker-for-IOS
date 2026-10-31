@@ -24,7 +24,22 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Nhận từng đoạn log (stdout + stderr) của game. Có thể được gọi từ thread nền.
+typedef void (^CatnipLogHandler)(NSString *text);
+
 @interface CatnipLove : NSObject
+
+/// Nơi nhận log khi đang bắt log (xem startLogCapture).
+@property (class, nonatomic, copy, nullable) CatnipLogHandler logHandler;
+
+/// Bắt đầu chuyển stdout/stderr (print(), lỗi Lua...) vào logHandler. Gọi trước runGameAtPath.
++ (void)startLogCapture;
+
+/// Dừng bắt log, trả stdout/stderr về như cũ và chuyển nốt phần còn lại.
++ (void)stopLogCapture;
+
+/// Yêu cầu game thoát (gửi sự kiện quit tới LÖVE). Gọi được từ main thread khi game đang chạy.
++ (void)requestQuit;
 
 /// Chuỗi phiên bản của lõi LÖVE được nhúng, ví dụ "12.0".
 + (NSString *)versionString;

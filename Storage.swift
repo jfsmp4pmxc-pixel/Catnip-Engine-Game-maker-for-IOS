@@ -72,7 +72,7 @@ struct AppSettings: Codable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         themeName       = try c.decodeIfPresent(String.self, forKey: .themeName) ?? "dark"
-        fontSize        = try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 14
+        fontSize        = min(max(try c.decodeIfPresent(Double.self, forKey: .fontSize) ?? 14, 2), 32)
         lastProject     = try c.decodeIfPresent(String.self, forKey: .lastProject)
         lastFile        = try c.decodeIfPresent(String.self, forKey: .lastFile)
         expandedFolders = try c.decodeIfPresent([String].self, forKey: .expandedFolders) ?? []
@@ -126,6 +126,43 @@ struct FileEntry {
     var depth: Int    { path.split(separator: "/").count - 1 }
 }
 
+// MARK: - Project kind
+
+enum ProjectKind: String, Codable, CaseIterable {
+    case love, scratch, python
+
+    var displayName: String {
+        switch self {
+        case .love:    return "LÖVE"
+        case .scratch: return "Scratch"
+        case .python:  return "Python"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .love:    return "Game 2D dùng LÖVE (Lua), chạy được ngay"
+        case .scratch: return "Dự án bình thường, tự do tạo file"
+        case .python:  return "Sắp ra mắt"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .love:    return "gamecontroller.fill"
+        case .scratch: return "doc.text"
+        case .python:  return "chevron.left.forwardslash.chevron.right"
+        }
+    }
+
+    /// Python chưa hỗ trợ (coming soon).
+    var isAvailable: Bool { self != .python }
+    /// Chỉ dự án LÖVE mới có nút Chạy.
+    var canRun: Bool { self == .love }
+}
+
+private struct ProjectMeta: Codable { var kind: ProjectKind }
+
 // MARK: - Project store
 
 final class ProjectStore {
@@ -169,14 +206,23 @@ final class ProjectStore {
     }
 
     @discardableResult
-    func createProject(_ name: String, withTemplate: Bool = true) throws -> String {
+    func createProject(_ name: String, kind: ProjectKind = .love) throws -> String {
+        guard kind.isAvailable else { throw StoreError.io("\(kind.displayName) sắp ra mắt") }
         let n = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValidProjectName(n) else { throw StoreError.invalidName }
         let url = projectURL(n)
         guard !fm.fileExists(atPath: url.path) else { throw StoreError.alreadyExists }
         do {
             try fm.createDirectory(at: url, withIntermediateDirectories: true)
-            if withTemplate { try writeTemplate(into: url, title: n) }
+            try writeMeta(kind, into: url)
+            switch kind {
+            case .love:
+                try writeTemplate(into: url, title: n)
+            case .scratch:
+                try "# \(n)\n".write(to: url.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+            case .python:
+                break
+            }
         } catch {
             throw StoreError.io(error.localizedDescription)
         }
@@ -195,6 +241,21 @@ final class ProjectStore {
     func deleteProject(_ name: String) throws {
         do { try fm.removeItem(at: projectURL(name)) }
         catch { throw StoreError.io(error.localizedDescription) }
+    }
+
+    /// Loại dự án, đọc từ .catnip.json (file ẩn). Dự án cũ chưa có file này thì đoán theo main.lua.
+    func kind(of project: String) -> ProjectKind {
+        let dir = projectURL(project)
+        if let data = try? Data(contentsOf: dir.appendingPathComponent(".catnip.json")),
+           let meta = try? JSONDecoder().decode(ProjectMeta.self, from: data) {
+            return meta.kind
+        }
+        return fm.fileExists(atPath: dir.appendingPathComponent("main.lua").path) ? .love : .scratch
+    }
+
+    private func writeMeta(_ kind: ProjectKind, into dir: URL) throws {
+        let data = try JSONEncoder().encode(ProjectMeta(kind: kind))
+        try data.write(to: dir.appendingPathComponent(".catnip.json"), options: .atomic)
     }
 
     /// Mẫu dự án LÖVE tối thiểu để chạy được ngay.
@@ -281,6 +342,51 @@ final class ProjectStore {
             if full.hasPrefix(basePath) { out.append(String(full.dropFirst(basePath.count))) }
         }
         return out.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// Sao chép một file từ bên ngoài (ảnh, âm thanh, font...) vào dự án.
+    /// Trùng tên thì thêm số (vd "hit 2.wav"). Trả về đường dẫn tương đối của file mới.
+    func importFile(project: String, from source: URL, toFolder folder: String?) throws -> String {
+        var name = source.lastPathComponent
+        for bad in ["/", ":", "\\"] { name = name.replacingOccurrences(of: bad, with: "_") }
+        while name.hasPrefix(".") { name.removeFirst() }
+        guard !name.isEmpty else { throw StoreError.invalidName }
+
+        let rel = folder ?? ""
+        if !rel.isEmpty, !Self.isValidRelativePath(rel) { throw StoreError.invalidName }
+        let dir = rel.isEmpty ? projectURL(project) : projectURL(project).appendingPathComponent(rel)
+
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        var candidate = name
+        var n = 2
+        while fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
+            candidate = ext.isEmpty ? "\(base) \(n)" : "\(base) \(n).\(ext)"
+            n += 1
+        }
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            try fm.copyItem(at: source, to: dir.appendingPathComponent(candidate))
+        } catch {
+            throw StoreError.io(error.localizedDescription)
+        }
+        return rel.isEmpty ? candidate : rel + "/" + candidate
+    }
+
+    private static let binaryExtensions: Set<String> = [
+        "png","jpg","jpeg","gif","bmp","tga","webp","ico","icns","dds","hdr",
+        "wav","mp3","ogg","oga","flac","m4a","aac","mod","xm","it","s3m",
+        "ttf","otf","ttc","woff","woff2","fnt",
+        "love","zip","gz","7z","rar","pdf","mp4","mov","avi","bin","dat","so","a","dylib"
+    ]
+
+    /// Có nên mở file này như văn bản không (loại trừ file nhị phân và file quá lớn).
+    func isTextFile(project: String, path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        if Self.binaryExtensions.contains(ext) { return false }
+        guard let url = try? fileURL(project, path),
+              let size = (try? fm.attributesOfItem(atPath: url.path))?[.size] as? NSNumber else { return false }
+        return size.intValue <= 2_000_000
     }
 
     func read(project: String, path: String) -> String? {

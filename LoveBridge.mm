@@ -47,6 +47,9 @@ extern "C" {
 #include <cstring>
 #include <string>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 namespace
 {
 
@@ -142,7 +145,113 @@ DoneAction runLoveOnce(const std::string &gamePath, int &retval, love::Variant &
 
 } // namespace
 
+// MARK: - Bắt log (stdout/stderr → pipe → logHandler)
+
+static CatnipLogHandler sLogHandler = nil;
+static int sSavedOut = -1;
+static int sSavedErr = -1;
+static int sPipeWrite = -1;
+static dispatch_queue_t sLogQueue = nil;
+static dispatch_source_t sReadSource = nil;
+
+// Đọc hết dữ liệu đang chờ trong pipe (non-blocking), chạy trên sLogQueue (serial).
+static void CatnipDrainPipe(int fd)
+{
+	char buf[4096];
+	for (;;)
+	{
+		ssize_t n = read(fd, buf, sizeof(buf));
+		if (n <= 0)
+			break;
+
+		// Vẫn in ra console gốc (hữu ích khi chạy từ Xcode).
+		if (sSavedOut >= 0)
+			(void) write(sSavedOut, buf, (size_t) n);
+
+		CatnipLogHandler handler = sLogHandler;
+		if (handler)
+		{
+			NSString *s = [[NSString alloc] initWithBytes:buf length:(NSUInteger) n encoding:NSUTF8StringEncoding];
+			if (!s)
+				s = [[NSString alloc] initWithBytes:buf length:(NSUInteger) n encoding:NSISOLatin1StringEncoding];
+			if (s)
+				handler(s);
+		}
+	}
+}
+
 @implementation CatnipLove
+
++ (CatnipLogHandler)logHandler { return sLogHandler; }
++ (void)setLogHandler:(CatnipLogHandler)handler { sLogHandler = [handler copy]; }
+
++ (void)startLogCapture
+{
+	if (sReadSource)
+		return;
+
+	int fds[2];
+	if (pipe(fds) != 0)
+		return;
+	int readFd = fds[0];
+	sPipeWrite = fds[1];
+	fcntl(readFd, F_SETFL, O_NONBLOCK);
+
+	// Không đệm, để print() hiện ngay.
+	fflush(stdout);
+	fflush(stderr);
+	setvbuf(stdout, NULL, _IONBF, 0);
+	setvbuf(stderr, NULL, _IONBF, 0);
+
+	sSavedOut = dup(STDOUT_FILENO);
+	sSavedErr = dup(STDERR_FILENO);
+	dup2(sPipeWrite, STDOUT_FILENO);
+	dup2(sPipeWrite, STDERR_FILENO);
+
+	sLogQueue = dispatch_queue_create("catnip.love.log", DISPATCH_QUEUE_SERIAL);
+	sReadSource = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, (uintptr_t) readFd, 0, sLogQueue);
+	dispatch_source_set_event_handler(sReadSource, ^{ CatnipDrainPipe(readFd); });
+	dispatch_source_set_cancel_handler(sReadSource, ^{ close(readFd); });
+	dispatch_resume(sReadSource);
+}
+
++ (void)stopLogCapture
+{
+	if (!sReadSource)
+		return;
+
+	fflush(stdout);
+	fflush(stderr);
+
+	// Trả stdout/stderr về như cũ, rồi đóng đầu ghi để pipe kết thúc.
+	dup2(sSavedOut, STDOUT_FILENO);
+	dup2(sSavedErr, STDERR_FILENO);
+	close(sPipeWrite);
+	sPipeWrite = -1;
+
+	// Chuyển nốt phần còn đọng, rồi huỷ nguồn đọc (cancel handler sẽ đóng đầu đọc).
+	dispatch_source_t source = sReadSource;
+	dispatch_sync(sLogQueue, ^{
+		int fd = (int) dispatch_source_get_handle(source);
+		CatnipDrainPipe(fd);
+	});
+	dispatch_source_cancel(source);
+
+	close(sSavedOut);
+	close(sSavedErr);
+	sSavedOut = -1;
+	sSavedErr = -1;
+	sReadSource = nil;
+	sLogQueue = nil;
+}
+
++ (void)requestQuit
+{
+	SDL_Event e;
+	SDL_zero(e);
+	e.type = SDL_EVENT_QUIT;
+	SDL_PushEvent(&e);
+}
 
 + (NSString *)versionString
 {

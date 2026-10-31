@@ -111,6 +111,7 @@ jobs:
                 - UI.swift
                 - Editor.swift
                 - EditorSidebar.swift
+                - GameRun.swift
           YML
           if [ "$WITH_LOVE" = "true" ]; then
           cat <<YML

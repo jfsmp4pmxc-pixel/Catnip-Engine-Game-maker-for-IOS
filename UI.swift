@@ -27,7 +27,10 @@ extension Notification.Name {
 
 enum Appearance {
     static var theme: Theme { Theme.byName(SettingsStore.shared.settings.themeName) }
-    static var fontSize: CGFloat { CGFloat(SettingsStore.shared.settings.fontSize) }
+    static let fontSizeRange: ClosedRange<Double> = 2...32
+    static var fontSize: CGFloat {
+        CGFloat(min(max(SettingsStore.shared.settings.fontSize, fontSizeRange.lowerBound), fontSizeRange.upperBound))
+    }
 
     static func style(_ nav: UINavigationController?) {
         guard let nav = nav else { return }
@@ -162,11 +165,28 @@ final class ProjectListViewController: UIViewController {
     }
 
     @objc private func addTapped() {
-        promptText(title: "Dự án mới", message: "Một dự án LÖVE sẽ được tạo sẵn main.lua và conf.lua.",
+        let sheet = UIAlertController(title: "Loại dự án", message: "Chọn loại cho dự án mới", preferredStyle: .actionSheet)
+        for kind in ProjectKind.allCases {
+            let title = kind.isAvailable ? "\(kind.displayName) — \(kind.summary)"
+                                         : "\(kind.displayName) (coming soon)"
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.askName(for: kind)
+            }
+            action.isEnabled = kind.isAvailable
+            sheet.addAction(action)
+        }
+        sheet.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+        sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        present(sheet, animated: true)
+    }
+
+    private func askName(for kind: ProjectKind) {
+        let note = kind == .love ? "Dự án LÖVE sẽ có sẵn main.lua và conf.lua." : "Dự án trống, bạn tự tạo file."
+        promptText(title: "Dự án \(kind.displayName) mới", message: note,
                    placeholder: "Tên dự án", confirm: "Tạo") { [weak self] name in
             guard let self = self else { return }
             do {
-                let created = try self.store.createProject(name)
+                let created = try self.store.createProject(name, kind: kind)
                 self.reload()
                 self.open(created)
             } catch { self.showError(error) }
@@ -182,8 +202,12 @@ final class ProjectListViewController: UIViewController {
             guard let self = self, name != project else { return }
             do {
                 try self.store.renameProject(project, to: name)
-                if SettingsStore.shared.settings.lastProject == project {
-                    SettingsStore.shared.update { $0.lastProject = name }
+                SettingsStore.shared.update { s in
+                    if s.lastProject == project { s.lastProject = name }
+                    // expandedFolders lưu dạng "<dự án>::<thư mục>": đổi theo tên mới.
+                    s.expandedFolders = s.expandedFolders.map {
+                        $0.hasPrefix(project + "::") ? name + "::" + String($0.dropFirst(project.count + 2)) : $0
+                    }
                 }
                 self.reload()
             } catch { self.showError(error) }
@@ -219,13 +243,23 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
         cfg.text = name
         cfg.textProperties.color = t.fgColor
         cfg.textProperties.font = .systemFont(ofSize: 17, weight: .semibold)
-        cfg.secondaryText = "\(count) mục"
+        let kind = store.kind(of: name)
+        cfg.secondaryText = "\(kind.displayName) · \(count) mục"
         cfg.secondaryTextProperties.color = t.mutedColor
-        cfg.image = UIImage(systemName: "gamecontroller.fill")
+        cfg.image = UIImage(systemName: kind.symbol)
         cfg.imageProperties.tintColor = t.accentColor
         cell.contentConfiguration = cfg
         cell.backgroundColor = t.bgColor
-        cell.accessoryType = .disclosureIndicator
+        let more = UIButton(type: .system)
+        more.setImage(UIImage(systemName: "ellipsis.circle"), for: .normal)
+        more.tintColor = t.accentColor
+        more.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        more.showsMenuAsPrimaryAction = true
+        more.menu = UIMenu(children: [
+            UIAction(title: "Đổi tên", image: UIImage(systemName: "pencil")) { [weak self] _ in self?.rename(name) },
+            UIAction(title: "Xoá", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in self?.delete(name) }
+        ])
+        cell.accessoryView = more
         let sel = UIView(); sel.backgroundColor = t.hoverColor
         cell.selectedBackgroundView = sel
         return cell
@@ -254,7 +288,7 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
 
 final class SettingsViewController: UITableViewController {
 
-    private let sizeRange: ClosedRange<Double> = 10...24
+    private let sizeRange: ClosedRange<Double> = 2...32
     private var sizeLabel: UILabel?
     private var previewLabel: UILabel?
 
