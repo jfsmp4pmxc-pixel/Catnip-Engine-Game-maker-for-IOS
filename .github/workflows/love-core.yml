@@ -1,0 +1,128 @@
+name: Build LOVE core (step 1 - verify)
+
+# Bước 1 của việc nhúng LÖVE vào Catnip: kiểm chứng rằng CI build được lõi LÖVE cho iOS
+# và cho biết chính xác sản phẩm nào (liblove.a, love.app...) được tạo ra.
+# Workflow này KHÔNG chạm vào app Catnip; kết quả (log + danh sách sản phẩm) dùng để viết cầu nối ở bước 2.
+
+on:
+  workflow_dispatch:
+    inputs:
+      love_ref:
+        description: "Commit/tag của love2d/love (mặc định: bản đã kiểm tra cấu trúc)"
+        required: true
+        default: "ef388d4371f5932491fbdcdd65ac7240e11c31a8"
+        type: string
+      deps_ref:
+        description: "Commit/tag của love2d/love-apple-dependencies"
+        required: true
+        default: "a5522634f1e581a1ebab73bf3ab4bd7a853b7a3e"
+        type: string
+
+jobs:
+  build-love-core:
+    name: Build LOVE core for iOS
+    runs-on: macos-15
+
+    env:
+      LOVE_REF: ${{ inputs.love_ref }}
+      DEPS_REF: ${{ inputs.deps_ref }}
+
+    steps:
+      - name: Show context
+        run: xcodebuild -version
+
+      - name: Fetch LOVE and dependencies (pinned)
+        run: |
+          set -e
+          fetch() { # url dir ref
+            git init -q "$2"
+            git -C "$2" remote add origin "$1"
+            git -C "$2" fetch -q --depth 1 origin "$3"
+            git -C "$2" checkout -q FETCH_HEAD
+          }
+          fetch https://github.com/love2d/love love "$LOVE_REF"
+          fetch https://github.com/love2d/love-apple-dependencies deps "$DEPS_REF"
+          # Theo hướng dẫn build iOS của LÖVE:
+          cp -R deps/iOS/libraries love/platform/xcode/ios/
+          cp -R deps/shared love/platform/xcode/
+          ls love/platform/xcode/ios/libraries love/platform/xcode/shared/Frameworks
+
+      - name: Build love-ios (app + liblove.a), unsigned
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project love/platform/xcode/love.xcodeproj \
+            -target love-ios \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee love-ios-build.log | tail -n 40
+
+      - name: Build liblove-ios standalone (informational)
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project love/platform/xcode/liblove.xcodeproj \
+            -target liblove-ios \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build-lib" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee liblove-ios-build.log | tail -n 40
+
+      - name: List build products
+        if: always()
+        run: |
+          {
+            echo "== products =="
+            find build build-lib -maxdepth 3 \( -name "*.a" -o -name "*.app" -o -name "*.framework" -o -name "*.xcframework" \) 2>/dev/null
+            echo
+            echo "== liblove.a size =="
+            find build build-lib -name "liblove.a" -exec ls -lh {} \; 2>/dev/null
+            echo
+            echo "== link inputs of the love-ios app =="
+            find build -path "*love.app/Frameworks/*" -maxdepth 6 -name "*.framework" 2>/dev/null
+          } | tee products.txt
+
+      - name: Package unsigned love.app as IPA
+        run: |
+          APP=$(find build -maxdepth 3 -name "love.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then echo "love.app not found"; exit 1; fi
+          rm -rf Payload love-ios-unsigned.ipa
+          mkdir -p Payload && cp -R "$APP" Payload/
+          rm -rf Payload/love.app/_CodeSignature Payload/love.app/embedded.mobileprovision
+          zip -qry love-ios-unsigned.ipa Payload
+          ls -lh love-ios-unsigned.ipa
+
+      - name: Upload build info
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: love-core-info
+          path: |
+            products.txt
+            love-ios-build.log
+            liblove-ios-build.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload liblove.a
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liblove-ios-static-lib
+          path: |
+            build/Release-iphoneos/liblove.a
+            build-lib/Release-iphoneos/liblove.a
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload unsigned LOVE IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: love-ios-unsigned-ipa
+          path: love-ios-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
