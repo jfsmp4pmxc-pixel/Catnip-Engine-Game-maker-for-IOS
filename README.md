@@ -35,7 +35,7 @@ Các dòng chip A9 đến các đời mới hơn.
   email  : ihhjnkk@gmail.com
 
 - youtube: @h3ll0-70       |admin
-  github : 
+  github : ilovegcc-g00
 ```
 
 
