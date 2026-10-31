@@ -29,11 +29,13 @@ Các dòng chip A9 đến các đời mới hơn.
                            |___ main.yml
 ```
 ## tác giả 
+```txt
 - youtube: @B40Ph4m        |admin
-- github : @B40Ph4m
-- email  : ihhjnkk@gmail.com
+  github : @B40Ph4m
+  email  : ihhjnkk@gmail.com
 
 - youtube: @h3ll0-70       |admin
+```
 
 
 
