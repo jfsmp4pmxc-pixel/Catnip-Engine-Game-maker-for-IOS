@@ -282,10 +282,10 @@ final class SettingsViewController: UITableViewController {
         NotificationCenter.default.post(name: .catnipSettingsChanged, object: nil)
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { 2 }
+    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        section == 0 ? "GIAO DIỆN" : "CỠ CHỮ TRONG EDITOR"
+        ["GIAO DIỆN", "CỠ CHỮ TRONG EDITOR", "SOẠN THẢO"][section]
     }
 
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
@@ -293,7 +293,7 @@ final class SettingsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        section == 0 ? Theme.all.count : 2
+        [Theme.all.count, 2, 2][section]
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -307,6 +307,20 @@ final class SettingsViewController: UITableViewController {
             let item = Theme.all[indexPath.row]
             cell.textLabel?.text = item.name
             cell.accessoryType = (item.id == t.id) ? .checkmark : .none
+        } else if indexPath.section == 2 {
+            let st = SettingsStore.shared.settings
+            let isNumbers = indexPath.row == 0
+            cell.textLabel?.text = isNumbers ? "Hiện số dòng" : "Tự xuống dòng"
+            let sw = UISwitch()
+            sw.isOn = isNumbers ? st.showLineNumbers : st.wrapLines
+            sw.onTintColor = t.accentColor
+            sw.addAction(UIAction { [weak self] _ in
+                SettingsStore.shared.update {
+                    if isNumbers { $0.showLineNumbers = sw.isOn } else { $0.wrapLines = sw.isOn }
+                }
+                self?.settingsChanged()
+            }, for: .valueChanged)
+            cell.accessoryView = sw
         } else if indexPath.row == 0 {
             let size = SettingsStore.shared.settings.fontSize
             cell.textLabel?.text = "\(Int(size)) pt"

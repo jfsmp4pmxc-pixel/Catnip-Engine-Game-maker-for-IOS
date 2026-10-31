@@ -63,6 +63,8 @@ struct AppSettings: Codable {
     var lastProject: String?
     var lastFile: String?
     var expandedFolders: [String] = []
+    var showLineNumbers: Bool = true
+    var wrapLines: Bool = false      // false = không ngắt dòng (cuộn ngang)
 
     init() {}
 
@@ -74,6 +76,8 @@ struct AppSettings: Codable {
         lastProject     = try c.decodeIfPresent(String.self, forKey: .lastProject)
         lastFile        = try c.decodeIfPresent(String.self, forKey: .lastFile)
         expandedFolders = try c.decodeIfPresent([String].self, forKey: .expandedFolders) ?? []
+        showLineNumbers = try c.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? true
+        wrapLines       = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? false
     }
 }
 

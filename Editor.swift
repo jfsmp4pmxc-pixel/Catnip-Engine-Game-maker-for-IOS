@@ -36,6 +36,8 @@ final class EditorViewController: UIViewController {
     let statusBar = UIView()
     let statusLabel = UILabel()
     let titleLabel = UILabel()
+    let gutter = LineNumberGutter()
+    var gutterWidth: NSLayoutConstraint!
     var langItem: UIBarButtonItem!
 
     let sidebar = UIView()
@@ -153,9 +155,19 @@ final class EditorViewController: UIViewController {
         textView.inputAccessoryView = makeAccessoryBar()
         view.addSubview(textView)
 
+        gutter.translatesAutoresizingMaskIntoConstraints = false
+        gutter.textView = textView
+        view.addSubview(gutter)
+        gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 44)
+
         NSLayoutConstraint.activate([
+            gutter.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            gutter.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            gutter.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
+            gutterWidth,
+
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            textView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            textView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
             textView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             textView.bottomAnchor.constraint(equalTo: statusBar.topAnchor)
         ])
@@ -175,6 +187,7 @@ final class EditorViewController: UIViewController {
         sidebarTitle.textColor = t.mutedColor
         fileTable.backgroundColor = t.bg2Color
         fileTable.separatorColor = t.borderColor
+        applyEditorOptions()
         rehighlightNow()
         updateTitle()
         updateStatus()
@@ -218,6 +231,7 @@ final class EditorViewController: UIViewController {
         textView.undoManager?.removeAllActions()
         SettingsStore.shared.update { $0.lastFile = path }
         rebuildLanguageMenu()
+        refreshGutter()
         rehighlightNow()
         updateTitle()
         updateStatus()
@@ -233,6 +247,7 @@ final class EditorViewController: UIViewController {
         textView.text = ""
         SettingsStore.shared.update { $0.lastFile = nil }
         rebuildLanguageMenu()
+        refreshGutter()
         updateTitle()
         updateStatus()
         fileTable.reloadData()
@@ -272,6 +287,58 @@ final class EditorViewController: UIViewController {
     @objc private func settingsTapped() {
         textView.resignFirstResponder()
         present(UINavigationController(rootViewController: SettingsViewController()), animated: true)
+    }
+
+    // MARK: Số dòng + xuống dòng (theo settings)
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        if SettingsStore.shared.settings.wrapLines { applyWrapWidth() }
+        gutter.setNeedsDisplay()
+    }
+
+    private func applyWrapWidth() {
+        let w = textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right
+        if w > 0, abs(textView.textContainer.size.width - w) > 0.5 {
+            textView.textContainer.size = CGSize(width: w, height: .greatestFiniteMagnitude)
+        }
+    }
+
+    func applyEditorOptions() {
+        let st = SettingsStore.shared.settings
+        let t = Appearance.theme
+        let tc = textView.textContainer
+        if st.wrapLines {
+            tc.widthTracksTextView = true
+            tc.lineBreakMode = .byCharWrapping
+            applyWrapWidth()
+        } else {
+            // Không ngắt dòng: container rất rộng, textView tự cuộn ngang.
+            tc.widthTracksTextView = false
+            tc.lineBreakMode = .byClipping
+            tc.size = CGSize(width: 10_000, height: .greatestFiniteMagnitude)
+        }
+        textView.alwaysBounceHorizontal = !st.wrapLines
+
+        gutter.isHidden = !st.showLineNumbers
+        gutter.font = .monospacedSystemFont(ofSize: max(Appearance.fontSize - 2, 9), weight: .regular)
+        gutter.textColor = t.mutedColor
+        gutter.lineColor = t.borderColor
+        gutter.backgroundColor = t.bg2Color
+        refreshGutter()
+    }
+
+    /// Cập nhật bề rộng cột số dòng theo số chữ số của dòng cuối, rồi vẽ lại.
+    func refreshGutter() {
+        guard SettingsStore.shared.settings.showLineNumbers else {
+            if gutterWidth.constant != 0 { gutterWidth.constant = 0 }
+            return
+        }
+        var lines = 1
+        for ch in (textView.text ?? "").utf16 where ch == 10 { lines += 1 }
+        let digits = max(2, String(lines).count)
+        let w = CGFloat(digits) * Appearance.fontSize * 0.6 + 18
+        if abs(gutterWidth.constant - w) > 0.5 { gutterWidth.constant = w }
+        gutter.setNeedsDisplay()
     }
 
     // MARK: Highlighting
@@ -447,11 +514,16 @@ extension EditorViewController: UITextViewDelegate {
         if !isDirty { isDirty = true; updateTitle() }
         scheduleSave()
         scheduleHighlight()
+        refreshGutter()
         updateStatus()
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
         updateStatus()
+    }
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        gutter.setNeedsDisplay()
     }
 
     /// Enter → giữ nguyên thụt lề của dòng hiện tại, thụt thêm nếu dòng mở một khối.
@@ -480,6 +552,74 @@ extension EditorViewController: UITextViewDelegate {
             return false
         default:
             return line.hasSuffix("{") || line.hasSuffix("[") || line.hasSuffix("(")
+        }
+    }
+}
+
+// MARK: - Cột số dòng
+
+/// Vẽ số dòng bên trái editor, đồng bộ với layoutManager của textView.
+/// Với dòng bị xuống hàng, chỉ đánh số ở phần đầu của dòng.
+final class LineNumberGutter: UIView {
+    weak var textView: UITextView?
+    var font = UIFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+    var textColor = UIColor.gray
+    var lineColor = UIColor.separator
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        contentMode = .redraw
+        isUserInteractionEnabled = false
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func draw(_ rect: CGRect) {
+        guard let tv = textView else { return }
+        let lm = tv.layoutManager
+        let text = (tv.text ?? "") as NSString
+        let offsetY = tv.contentOffset.y
+        let topInset = tv.textContainerInset.top
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
+        let width = bounds.width
+
+        // đường kẻ phân cách bên phải
+        lineColor.setFill()
+        UIRectFill(CGRect(x: width - 0.5, y: 0, width: 0.5, height: bounds.height))
+
+        func drawNumber(_ n: Int, in lineRect: CGRect) {
+            let s = "\(n)" as NSString
+            let size = s.size(withAttributes: attrs)
+            let y = lineRect.minY + topInset - offsetY + (lineRect.height - size.height) / 2
+            s.draw(at: CGPoint(x: width - 8 - size.width, y: y), withAttributes: attrs)
+        }
+
+        let visible = CGRect(x: 0, y: offsetY - topInset,
+                             width: max(tv.textContainer.size.width, 1), height: bounds.height)
+        let glyphs = lm.glyphRange(forBoundingRect: visible, in: tv.textContainer)
+
+        if glyphs.length > 0 {
+            let firstChar = lm.characterIndexForGlyph(at: glyphs.location)
+            var newlinesBefore = 0
+            for ch in text.substring(to: firstChar).utf16 where ch == 10 { newlinesBefore += 1 }
+            let firstStartsParagraph = firstChar == 0 || text.character(at: firstChar - 1) == 10
+            var next = newlinesBefore + (firstStartsParagraph ? 1 : 2)
+
+            lm.enumerateLineFragments(forGlyphRange: glyphs) { lineRect, _, _, lineGlyphs, _ in
+                let chars = lm.characterRange(forGlyphRange: lineGlyphs, actualGlyphRange: nil)
+                let startsParagraph = chars.location == 0 || text.character(at: chars.location - 1) == 10
+                if startsParagraph {
+                    drawNumber(next, in: lineRect)
+                    next += 1
+                }
+            }
+        }
+
+        // Dòng cuối rỗng (văn bản trống hoặc kết thúc bằng xuống dòng)
+        let extra = lm.extraLineFragmentRect
+        if extra.height > 0 {
+            var total = 1
+            for ch in text.utf16 where ch == 10 { total += 1 }
+            drawNumber(total, in: extra)
         }
     }
 }
