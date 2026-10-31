@@ -28,6 +28,10 @@ Các dòng chip A9 đến các đời mới hơn.
              |___ workflows/
                            |___ main.yml
 ```
+## tác giả 
+youtube: @B40Ph4m        |admin
+youtube: @h3ll0-70       |admin
+
 
 
 
