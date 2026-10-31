@@ -28,6 +28,23 @@ Các dòng chip A9 đến các đời mới hơn.
              |___ workflows/
                            |___ main.yml
 ```
+## Giấy phép
+
+Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
+
+Bạn được tự do:
+- Sử dụng cho mọi mục đích, kể cả thương mại
+- Sửa đổi mã nguồn
+- Fork và phân phối lại
+
+Với điều kiện:
+- **Ghi công tác giả gốc** — giữ nguyên thông báo bản quyền
+- **Công khai mã nguồn** — mọi sản phẩm phái sinh phải dùng cùng giấy phép GPLv3
+- Ghi rõ các thay đổi đã thực hiện so với bản gốc
+
+Xem file [LICENSE](LICENSE) để biết chi tiết đầy đủ.
+
+Copyright (C) 2026 **jfsmp4pmxc-pixel** <ihhjnkk@gmail.com>
 ## tác giả 
 ```txt
 - youtube: @B40Ph4m        |admin
