@@ -68,7 +68,11 @@ jobs:
               platform: iOS
               sources:
                 - main.swift
+                - Models.swift
+                - Storage.swift
                 - UI.swift
+                - Editor.swift
+                - EditorSidebar.swift
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_ID}
