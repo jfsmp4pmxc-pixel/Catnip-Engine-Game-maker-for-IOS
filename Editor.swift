@@ -299,7 +299,7 @@ final class EditorViewController: UIViewController {
     private func applyWrapWidth() {
         let w = textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right
         if w > 0, abs(textView.textContainer.size.width - w) > 0.5 {
-            textView.textContainer.size = CGSize(width: w, height: .greatestFiniteMagnitude)
+            textView.textContainer.size = CGSize(width: w, height: CGFloat.greatestFiniteMagnitude)
         }
     }
 
@@ -315,7 +315,7 @@ final class EditorViewController: UIViewController {
             // Không ngắt dòng: container rất rộng, textView tự cuộn ngang.
             tc.widthTracksTextView = false
             tc.lineBreakMode = .byClipping
-            tc.size = CGSize(width: 10_000, height: .greatestFiniteMagnitude)
+            tc.size = CGSize(width: 10_000, height: CGFloat.greatestFiniteMagnitude)
         }
         textView.alwaysBounceHorizontal = !st.wrapLines
 
@@ -618,7 +618,7 @@ final class LineNumberGutter: UIView {
         let extra = lm.extraLineFragmentRect
         if extra.height > 0 {
             var total = 1
-            for ch in text.utf16 where ch == 10 { total += 1 }
+            for ch in (text as String).utf16 where ch == 10 { total += 1 }
             drawNumber(total, in: extra)
         }
     }
