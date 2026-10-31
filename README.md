@@ -30,7 +30,8 @@ Các dòng chip A9 đến các đời mới hơn.
 ```
 ## tác giả 
 - youtube: @B40Ph4m        |admin
-- github : 
+- github : @B40Ph4m
+- email  : ihhjnkk@gmail.com
 
 - youtube: @h3ll0-70       |admin
 
