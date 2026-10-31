@@ -4,6 +4,14 @@
 ## giới thiệu
 - Chào mừng bạn đến với Catnip Engine!, đây là một game engine chạy bằng lõi là Love2D. Được thiết kế riêng cho IPhone.
 - Công cụ này giúp nhà phát triển lập trình ngay trên thiết bị di động (IPhone).
-- Catnip mang đến cho bạn một môi trường lập trình gần như đầy đủ ngay trên IPhone của bạn.
-## 
+- Catnip mang đến cho bạn một môi trường lập trình gần như đầy đủ ngay trên IPhone của bạn với: trình soạn thảo mã, quản lý dự án, tuỳ chỉnh,...
+## công nghệ
+- Catnip được viết bằng Swift, Obj-C và sử dụng LÖVE framework để chạy các chương trình mà bạn viết.
+## yêu cầu
+```txt
+IOS 15 trở lên.
+Các dòng chip A9 đến các đời mới hơn
+```
+
+
 
