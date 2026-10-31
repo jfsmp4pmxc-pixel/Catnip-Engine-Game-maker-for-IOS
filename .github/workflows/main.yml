@@ -26,6 +26,11 @@ on:
         options:
           - Release
           - Debug
+      with_love:
+        description: "Nhúng lõi LÖVE (nút Chạy). Tắt nếu cần build nhanh chỉ phần editor"
+        required: true
+        default: true
+        type: boolean
 
 jobs:
   build-ipa:
@@ -38,6 +43,10 @@ jobs:
       MARKETING_VERSION: ${{ inputs.marketing_version }}
       BUILD_NUMBER: ${{ inputs.build_number }}
       CONFIG: ${{ inputs.configuration }}
+      WITH_LOVE: ${{ inputs.with_love }}
+      # Bản LÖVE đã kiểm chứng build được (xem workflow love-core.yml)
+      LOVE_REF: ef388d4371f5932491fbdcdd65ac7240e11c31a8
+      DEPS_REF: a5522634f1e581a1ebab73bf3ab4bd7a853b7a3e
 
     steps:
       - name: Checkout
@@ -54,9 +63,38 @@ jobs:
       - name: Install XcodeGen & xcbeautify
         run: brew install xcodegen xcbeautify
 
+      - name: Build LOVE core (liblove.a)
+        if: ${{ inputs.with_love }}
+        run: |
+          set -e
+          fetch() { # url dir ref
+            git init -q "$2"
+            git -C "$2" remote add origin "$1"
+            git -C "$2" fetch -q --depth 1 origin "$3"
+            git -C "$2" checkout -q FETCH_HEAD
+          }
+          fetch https://github.com/love2d/love love "$LOVE_REF"
+          fetch https://github.com/love2d/love-apple-dependencies deps "$DEPS_REF"
+          cp -R deps/iOS/libraries love/platform/xcode/ios/
+          cp -R deps/shared love/platform/xcode/
+          set -o pipefail
+          xcodebuild \
+            -project love/platform/xcode/liblove.xcodeproj \
+            -target liblove-ios \
+            -configuration Release \
+            -sdk iphoneos \
+            SYMROOT="$PWD/build-love" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | xcbeautify
+          ls -lh build-love/Release-iphoneos/liblove.a
+
       - name: Generate Xcode project
         run: |
-          cat > project.yml <<YML
+          LOVE_DIR="$PWD/love"
+          LOVE_LIB="$PWD/build-love/Release-iphoneos/liblove.a"
+          LOVE_XC="$LOVE_DIR/platform/xcode"
+          {
+          cat <<YML
           name: Catnip
           options:
             deploymentTarget:
@@ -73,6 +111,15 @@ jobs:
                 - UI.swift
                 - Editor.swift
                 - EditorSidebar.swift
+          YML
+          if [ "$WITH_LOVE" = "true" ]; then
+          cat <<YML
+                - LoveBridge.mm
+                - LoveBridge.h
+                - Catnip-Bridging-Header.h
+          YML
+          fi
+          cat <<YML
               settings:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_ID}
@@ -86,6 +133,52 @@ jobs:
                   SWIFT_VERSION: 5.9
                   TARGETED_DEVICE_FAMILY: "1,2"
           YML
+          if [ "$WITH_LOVE" = "true" ]; then
+          cat <<YML
+                  SWIFT_OBJC_BRIDGING_HEADER: Catnip-Bridging-Header.h
+                  SWIFT_ACTIVE_COMPILATION_CONDITIONS: "\$(inherited) CATNIP_HAS_LOVE"
+                  CLANG_CXX_LANGUAGE_STANDARD: c++17
+                  CLANG_CXX_LIBRARY: libc++
+                  HEADER_SEARCH_PATHS: "\$(inherited) ${LOVE_DIR}/src ${LOVE_DIR}/src/libraries ${LOVE_DIR}/src/modules ${LOVE_XC}/ios/libraries/Lua.xcframework/ios-arm64/Headers"
+                  FRAMEWORK_SEARCH_PATHS: "\$(inherited) ${LOVE_XC}/shared/Frameworks/SDL3.xcframework/ios-arm64"
+                  OTHER_LDFLAGS: "\$(inherited) -ObjC ${LOVE_LIB}"
+              dependencies:
+                - framework: ${LOVE_XC}/shared/Frameworks/SDL3.xcframework
+                  embed: true
+                  codeSign: false
+                - framework: ${LOVE_XC}/ios/libraries/Lua.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/freetype.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/harfbuzz.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/modplug.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/ogg.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/theora.xcframework
+                  embed: false
+                - framework: ${LOVE_XC}/ios/libraries/vorbis.xcframework
+                  embed: false
+                - sdk: AVFoundation.framework
+                - sdk: AudioToolbox.framework
+                - sdk: CoreGraphics.framework
+                - sdk: CoreHaptics.framework
+                - sdk: CoreMotion.framework
+                - sdk: GameController.framework
+                - sdk: Metal.framework
+                - sdk: OpenAL.framework
+                - sdk: OpenGLES.framework
+                - sdk: QuartzCore.framework
+                - sdk: UIKit.framework
+                - sdk: libz.tbd
+                - sdk: libbz2.tbd
+                - sdk: libc++.tbd
+          YML
+          fi
+          } > project.yml
+          echo "=== project.yml ==="
+          cat project.yml
           xcodegen generate
 
       - name: Build for device (unsigned)

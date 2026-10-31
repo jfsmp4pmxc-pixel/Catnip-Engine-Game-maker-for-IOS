@@ -116,7 +116,9 @@ final class EditorViewController: UIViewController {
         let save = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"),
                                    style: .plain, target: self, action: #selector(saveTapped))
         langItem = UIBarButtonItem(title: language.displayName, image: nil, primaryAction: nil, menu: nil)
-        navigationItem.rightBarButtonItems = [gear, save, langItem]
+        let run = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
+                                  style: .plain, target: self, action: #selector(runTapped))
+        navigationItem.rightBarButtonItems = [run, gear, save, langItem]
         rebuildLanguageMenu()
     }
 
@@ -282,6 +284,29 @@ final class EditorViewController: UIViewController {
         guard currentPath != nil, canEdit else { return }
         isDirty = true   // ép ghi lại dù nội dung không đổi
         if flushSave() { flash("✓ Đã lưu \(currentPath ?? "")") }
+    }
+
+    /// Chạy dự án bằng lõi LÖVE. Chặn tại đây tới khi game thoát, rồi quay lại editor.
+    @objc private func runTapped() {
+        guard flushSave() else { return }
+        #if CATNIP_HAS_LOVE
+        guard store.read(project: project, path: "main.lua") != nil else {
+            flash("⚠️ Dự án cần có file main.lua để chạy")
+            return
+        }
+        textView.resignFirstResponder()
+        let path = store.projectURL(project).path
+        let window = view.window
+        flash("▶︎ Đang chạy…")
+        // Chạy ở lượt sau để thanh trạng thái kịp cập nhật trước khi LÖVE chiếm vòng lặp.
+        DispatchQueue.main.async { [weak self] in
+            let code = CatnipLove.runGame(atPath: path)
+            window?.makeKeyAndVisible()
+            self?.flash(code == 0 ? "■ Game đã thoát" : "■ Game thoát với mã \(code)")
+        }
+        #else
+        flash("⚠️ Bản build này chưa nhúng lõi LÖVE")
+        #endif
     }
 
     @objc private func settingsTapped() {
