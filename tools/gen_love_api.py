@@ -24,7 +24,7 @@ for mod in sorted(os.listdir(mods)):
         for name, body in table.findall(src):
             names = set(entry.findall(body))
             m = re.fullmatch(r'w_(\w+?)_functions', name)
-            names = {n for n in names if not n.startswith("_") or n.endswith("_i")}
+            names = {n for n in names if not (n.startswith("_") or n.endswith("_i"))}
             if name == "functions":
                 functions.setdefault(mod, set()).update(names)
             elif m:
