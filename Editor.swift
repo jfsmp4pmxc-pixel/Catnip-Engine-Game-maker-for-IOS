@@ -42,6 +42,9 @@ final class EditorViewController: UIViewController {
     let gutter = LineNumberGutter()
     var gutterWidth: NSLayoutConstraint!
     var langItem: UIBarButtonItem!
+    var saveItem: UIBarButtonItem!
+    var previewItem: UIBarButtonItem!
+    var runItem: UIBarButtonItem!
 
     let sidebar = UIView()
     let sidebarHeader = UIView()
@@ -115,21 +118,24 @@ final class EditorViewController: UIViewController {
                                          style: .plain, target: self, action: #selector(toggleSidebar))
         navigationItem.leftBarButtonItem = sidebarBtn
 
-        let gear = UIBarButtonItem(image: UIImage(systemName: "gearshape"),
-                                   style: .plain, target: self, action: #selector(settingsTapped))
-        let save = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"),
+        saveItem = UIBarButtonItem(image: UIImage(systemName: "square.and.arrow.down"),
                                    style: .plain, target: self, action: #selector(saveTapped))
-        langItem = UIBarButtonItem(title: language.displayName, image: nil, primaryAction: nil, menu: nil)
-        let log = UIBarButtonItem(image: UIImage(systemName: "text.alignleft"),
-                                  style: .plain, target: self, action: #selector(logTapped))
-        var items = [gear, save, langItem!]
-        if kind.canRun {
-            let run = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
-                                      style: .plain, target: self, action: #selector(runTapped))
-            items = [run, log] + items
-        }
-        navigationItem.rightBarButtonItems = items
+        previewItem = UIBarButtonItem(image: UIImage(systemName: "eye"),
+                                      style: .plain, target: self, action: #selector(previewTapped))
+        runItem = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
+                                  style: .plain, target: self, action: #selector(runTapped))
+        // Menu "⋯": Log, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
+        langItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: nil)
         rebuildLanguageMenu()
+    }
+
+    /// Các nút bên phải: [Xem Markdown] [Chạy] Lưu ⋯ (Xem chỉ khi đang mở file Markdown, Chạy chỉ ở dự án LÖVE).
+    func updateNavItems() {
+        guard langItem != nil else { return }
+        var items: [UIBarButtonItem] = [langItem, saveItem]
+        if kind.canRun { items.append(runItem) }
+        if language == .markdown { items.append(previewItem) }
+        navigationItem.rightBarButtonItems = items
     }
 
     private func buildStatusBar() {
@@ -290,15 +296,27 @@ final class EditorViewController: UIViewController {
 
     @objc private func flushNotification() { flushSave() }
 
+    /// Mở trình xem Markdown cho file đang mở (dùng nội dung đang gõ, chưa cần lưu).
+    @objc func previewTapped() {
+        guard let path = currentPath else { return }
+        textView.resignFirstResponder()
+        flushSave()
+        let vc = MarkdownPreviewViewController(project: project, path: path, text: textView.text ?? "")
+        vc.onOpenFile = { [weak self] rel in self?.openFile(rel) }
+        let nav = CatnipNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
+
     @objc private func saveTapped() {
         guard currentPath != nil, canEdit else { return }
         isDirty = true   // ép ghi lại dù nội dung không đổi
         if flushSave() { flash("✓ Đã lưu \(currentPath ?? "")") }
     }
 
-    @objc private func logTapped() {
+    @objc func logTapped() {
         textView.resignFirstResponder()
-        let nav = UINavigationController(rootViewController: LogViewController())
+        let nav = CatnipNavigationController(rootViewController: LogViewController())
         present(nav, animated: true)
     }
 
@@ -317,6 +335,7 @@ final class EditorViewController: UIViewController {
         isGameRunning = true
         flash("▶︎ Đang chạy…")
 
+        OrientationPolicy.gameRunning = true
         GameLog.shared.clear()
         CatnipLove.logHandler = { GameLog.shared.append($0) }
         CatnipLove.startLogCapture()
@@ -328,7 +347,9 @@ final class EditorViewController: UIViewController {
             CatnipLove.stopLogCapture()
             CatnipLove.logHandler = nil
             GameRunOverlay.hide()
+            OrientationPolicy.gameRunning = false
             window?.makeKeyAndVisible()
+            OrientationPolicy.refresh()
             self?.isGameRunning = false
             self?.flash(code == 0 ? "■ Game đã thoát" : "■ Game thoát với mã \(code)")
         }
@@ -337,9 +358,9 @@ final class EditorViewController: UIViewController {
         #endif
     }
 
-    @objc private func settingsTapped() {
+    @objc func settingsTapped() {
         textView.resignFirstResponder()
-        present(UINavigationController(rootViewController: SettingsViewController()), animated: true)
+        present(CatnipNavigationController(rootViewController: SettingsViewController()), animated: true)
     }
 
     // MARK: Số dòng + xuống dòng (theo settings)
@@ -373,7 +394,7 @@ final class EditorViewController: UIViewController {
         textView.alwaysBounceHorizontal = !st.wrapLines
 
         gutter.isHidden = !st.showLineNumbers
-        gutter.font = .monospacedSystemFont(ofSize: max(Appearance.fontSize - 2, 2), weight: .regular)
+        gutter.font = Appearance.codeFont(max(Appearance.fontSize - 2, 2))
         gutter.textColor = t.mutedColor
         gutter.lineColor = t.borderColor
         gutter.backgroundColor = t.bg2Color
@@ -389,7 +410,8 @@ final class EditorViewController: UIViewController {
         var lines = 1
         for ch in (textView.text ?? "").utf16 where ch == 10 { lines += 1 }
         let digits = max(2, String(lines).count)
-        let w = CGFloat(digits) * Appearance.fontSize * 0.6 + 18
+        let digitWidth = ("0" as NSString).size(withAttributes: [.font: gutter.font]).width
+        let w = ceil(CGFloat(digits) * digitWidth) + 18
         if abs(gutterWidth.constant - w) > 0.5 { gutterWidth.constant = w }
         gutter.setNeedsDisplay()
     }
@@ -407,7 +429,7 @@ final class EditorViewController: UIViewController {
         // Đang gõ dở (Telex/VNI, bàn phím CJK…): chờ gõ xong rồi mới tô, tránh phá chữ đang soạn.
         guard textView.markedTextRange == nil else { scheduleHighlight(); return }
         let t = Appearance.theme
-        let font = UIFont.monospacedSystemFont(ofSize: Appearance.fontSize, weight: .regular)
+        let font = Appearance.codeFont()
         let lang: Language = textView.textStorage.length > 200_000 ? .plaintext : language
         SyntaxHighlighter.apply(to: textView.textStorage, language: lang, theme: t, font: font)
         textView.typingAttributes = [.font: font, .foregroundColor: t.fgColor]
@@ -415,7 +437,7 @@ final class EditorViewController: UIViewController {
 
     // MARK: Language menu
     func rebuildLanguageMenu() {
-        let actions = Language.allCases.map { lang in
+        let langs = Language.allCases.map { lang in
             UIAction(title: lang.displayName, state: lang == language ? .on : .off) { [weak self] _ in
                 guard let self = self else { return }
                 self.language = lang
@@ -424,8 +446,20 @@ final class EditorViewController: UIViewController {
                 self.updateStatus()
             }
         }
-        langItem.title = language.displayName
-        langItem.menu = UIMenu(title: "Ngôn ngữ tô màu", children: actions)
+        var top: [UIMenuElement] = []
+        if kind.canRun {
+            top.append(UIAction(title: "Xem log lần chạy gần nhất", image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
+                self?.logTapped()
+            })
+        }
+        top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+            self?.settingsTapped()
+        })
+        top.append(UIMenu(title: "Ngôn ngữ tô màu: \(language.displayName)",
+                          image: UIImage(systemName: "chevron.left.forwardslash.chevron.right"),
+                          children: langs))
+        langItem.menu = UIMenu(children: top)
+        updateNavItems()
     }
 
     // MARK: Title + status

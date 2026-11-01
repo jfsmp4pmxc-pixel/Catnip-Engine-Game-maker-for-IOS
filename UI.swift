@@ -32,6 +32,17 @@ enum Appearance {
         CGFloat(min(max(SettingsStore.shared.settings.fontSize, fontSizeRange.lowerBound), fontSizeRange.upperBound))
     }
 
+    /// Font của editor: font người dùng đã chọn (nếu còn), không thì font monospace của hệ thống.
+    static func codeFont(_ size: CGFloat? = nil) -> UIFont {
+        let pt = size ?? fontSize
+        if let name = SettingsStore.shared.settings.fontName,
+           FontStore.shared.contains(postScriptName: name),
+           let f = UIFont(name: name, size: pt) {
+            return f
+        }
+        return .monospacedSystemFont(ofSize: pt, weight: .regular)
+    }
+
     static func style(_ nav: UINavigationController?) {
         guard let nav = nav else { return }
         let t = theme
@@ -160,7 +171,7 @@ final class ProjectListViewController: UIViewController {
     // MARK: Actions
 
     @objc private func settingsTapped() {
-        let nav = UINavigationController(rootViewController: SettingsViewController())
+        let nav = CatnipNavigationController(rootViewController: SettingsViewController())
         present(nav, animated: true)
     }
 
@@ -288,9 +299,26 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
 
 final class SettingsViewController: UITableViewController {
 
-    private let sizeRange: ClosedRange<Double> = 2...32
+    private enum Section: Int, CaseIterable {
+        case theme, font, size, editing, screen
+
+        var title: String {
+            switch self {
+            case .theme:   return "GIAO DIỆN"
+            case .font:    return "FONT TRONG EDITOR"
+            case .size:    return "CỠ CHỮ (2–32 pt)"
+            case .editing: return "SOẠN THẢO"
+            case .screen:  return "MÀN HÌNH"
+            }
+        }
+    }
+
+    private enum ImportKind { case theme, font }
+
+    private let sizeRange = Appearance.fontSizeRange
     private var sizeLabel: UILabel?
     private var previewLabel: UILabel?
+    private var importKind: ImportKind = .theme
 
     init() { super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -316,79 +344,250 @@ final class SettingsViewController: UITableViewController {
         NotificationCenter.default.post(name: .catnipSettingsChanged, object: nil)
     }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    private func fail(_ message: String) {
+        let ac = UIAlertController(title: "Không nhập được", message: message, preferredStyle: .alert)
+        ac.addAction(UIAlertAction(title: "OK", style: .default))
+        present(ac, animated: true)
+    }
+
+    // MARK: Số dòng / số hàng
+
+    private var themes: [Theme] { Theme.all }
+    private var fonts: [EditorFontInfo] { FontStore.shared.fonts }
+
+    override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        ["GIAO DIỆN", "CỠ CHỮ TRONG EDITOR", "SOẠN THẢO"][section]
+        Section(rawValue: section)?.title
+    }
+
+    override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
+        switch Section(rawValue: section)! {
+        case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để xoá theme đã nhập."
+        case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
+        case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
+        default:      return nil
+        }
     }
 
     override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Appearance.theme.mutedColor
     }
 
+    override func tableView(_ tableView: UITableView, willDisplayFooterView view: UIView, forSection section: Int) {
+        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Appearance.theme.mutedColor
+    }
+
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        [Theme.all.count, 2, 2][section]
+        switch Section(rawValue: section)! {
+        case .theme:   return themes.count + 1          // + "Nhập theme…"
+        case .font:    return 1 + fonts.count + 1       // mặc định + font đã nhập + "Nhập font…"
+        case .size:    return 2                         // bộ chỉnh + dòng xem trước
+        case .editing: return 2
+        case .screen:  return 1
+        }
+    }
+
+    private func switchCell(_ cell: UITableViewCell, text: String, isOn: Bool,
+                            onChange: @escaping (Bool) -> Void) {
+        cell.textLabel?.text = text
+        cell.selectionStyle = .none
+        let sw = UISwitch()
+        sw.isOn = isOn
+        sw.onTintColor = Appearance.theme.accentColor
+        sw.addAction(UIAction { _ in onChange(sw.isOn) }, for: .valueChanged)
+        cell.accessoryView = sw
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let t = Appearance.theme
+        let st = SettingsStore.shared.settings
         let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
         cell.backgroundColor = t.bg2Color
         cell.textLabel?.textColor = t.fgColor
-        cell.selectionStyle = indexPath.section == 0 ? .default : .none
+        cell.textLabel?.font = .systemFont(ofSize: 16)
+        cell.selectionStyle = .default
+        let sel = UIView(); sel.backgroundColor = t.hoverColor
+        cell.selectedBackgroundView = sel
 
-        if indexPath.section == 0 {
-            let item = Theme.all[indexPath.row]
-            cell.textLabel?.text = item.name
-            cell.accessoryType = (item.id == t.id) ? .checkmark : .none
-        } else if indexPath.section == 2 {
-            let st = SettingsStore.shared.settings
-            let isNumbers = indexPath.row == 0
-            cell.textLabel?.text = isNumbers ? "Hiện số dòng" : "Tự xuống dòng"
-            let sw = UISwitch()
-            sw.isOn = isNumbers ? st.showLineNumbers : st.wrapLines
-            sw.onTintColor = t.accentColor
-            sw.addAction(UIAction { [weak self] _ in
-                SettingsStore.shared.update {
-                    if isNumbers { $0.showLineNumbers = sw.isOn } else { $0.wrapLines = sw.isOn }
+        func importRow(_ title: String) {
+            cell.textLabel?.text = title
+            cell.textLabel?.textColor = t.accentColor
+            cell.imageView?.image = UIImage(systemName: "square.and.arrow.down")
+            cell.imageView?.tintColor = t.accentColor
+        }
+
+        switch Section(rawValue: indexPath.section)! {
+        case .theme:
+            if indexPath.row == themes.count {
+                importRow("Nhập theme (.tmTheme)…")
+            } else {
+                let item = themes[indexPath.row]
+                cell.textLabel?.text = item.name + (item.isCustom ? "  · đã nhập" : "")
+                cell.accessoryType = (item.id == t.id) ? .checkmark : .none
+            }
+
+        case .font:
+            if indexPath.row == 0 {
+                cell.textLabel?.text = "Mặc định (monospace hệ thống)"
+                cell.accessoryType = (st.fontName == nil) ? .checkmark : .none
+            } else if indexPath.row <= fonts.count {
+                let f = fonts[indexPath.row - 1]
+                cell.textLabel?.text = f.displayName
+                cell.textLabel?.font = UIFont(name: f.postScriptName, size: 16) ?? .systemFont(ofSize: 16)
+                cell.accessoryType = (st.fontName == f.postScriptName) ? .checkmark : .none
+            } else {
+                importRow("Nhập font (.ttf, .otf)…")
+            }
+
+        case .size:
+            cell.selectionStyle = .none
+            if indexPath.row == 0 {
+                cell.textLabel?.text = "\(Int(Appearance.fontSize)) pt"
+                sizeLabel = cell.textLabel
+                let stepper = UIStepper()
+                stepper.minimumValue = sizeRange.lowerBound
+                stepper.maximumValue = sizeRange.upperBound
+                stepper.stepValue = 1
+                stepper.value = Double(Appearance.fontSize)
+                stepper.addTarget(self, action: #selector(stepperChanged(_:)), for: .valueChanged)
+                cell.accessoryView = stepper
+            } else {
+                cell.textLabel?.text = "local x = love.graphics.getWidth()"
+                cell.textLabel?.font = Appearance.codeFont()
+                cell.textLabel?.textColor = t.tokenColor(.keyword)
+                previewLabel = cell.textLabel
+            }
+
+        case .editing:
+            if indexPath.row == 0 {
+                switchCell(cell, text: "Hiện số dòng", isOn: st.showLineNumbers) { [weak self] on in
+                    SettingsStore.shared.update { $0.showLineNumbers = on }
+                    self?.settingsChanged()
                 }
+            } else {
+                switchCell(cell, text: "Tự xuống dòng", isOn: st.wrapLines) { [weak self] on in
+                    SettingsStore.shared.update { $0.wrapLines = on }
+                    self?.settingsChanged()
+                }
+            }
+
+        case .screen:
+            switchCell(cell, text: "Khoá chiều dọc", isOn: st.lockPortrait) { [weak self] on in
+                SettingsStore.shared.update { $0.lockPortrait = on }
+                OrientationPolicy.refresh()
                 self?.settingsChanged()
-            }, for: .valueChanged)
-            cell.accessoryView = sw
-        } else if indexPath.row == 0 {
-            let size = SettingsStore.shared.settings.fontSize
-            cell.textLabel?.text = "\(Int(size)) pt"
-            sizeLabel = cell.textLabel
-            let stepper = UIStepper()
-            stepper.minimumValue = sizeRange.lowerBound
-            stepper.maximumValue = sizeRange.upperBound
-            stepper.stepValue = 1
-            stepper.value = size
-            stepper.addTarget(self, action: #selector(stepperChanged(_:)), for: .valueChanged)
-            cell.accessoryView = stepper
-        } else {
-            cell.textLabel?.text = "local x = love.graphics.getWidth()"
-            cell.textLabel?.font = .monospacedSystemFont(ofSize: Appearance.fontSize, weight: .regular)
-            cell.textLabel?.textColor = t.tokenColor(.keyword)
-            previewLabel = cell.textLabel
+            }
         }
         return cell
     }
 
+    // MARK: Chọn / nhập
+
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        guard indexPath.section == 0 else { return }
-        let chosen = Theme.all[indexPath.row]
-        SettingsStore.shared.update { $0.themeName = chosen.id }
-        refreshColors()
-        tableView.reloadData()
-        settingsChanged()
+        switch Section(rawValue: indexPath.section)! {
+        case .theme:
+            if indexPath.row == themes.count {
+                presentImporter(.theme)
+            } else {
+                let chosen = themes[indexPath.row]
+                SettingsStore.shared.update { $0.themeName = chosen.id }
+                refreshColors()
+                tableView.reloadData()
+                settingsChanged()
+            }
+        case .font:
+            if indexPath.row == 0 {
+                SettingsStore.shared.update { $0.fontName = nil }
+                tableView.reloadSections([Section.font.rawValue, Section.size.rawValue], with: .none)
+                settingsChanged()
+            } else if indexPath.row <= fonts.count {
+                let f = fonts[indexPath.row - 1]
+                SettingsStore.shared.update { $0.fontName = f.postScriptName }
+                tableView.reloadSections([Section.font.rawValue, Section.size.rawValue], with: .none)
+                settingsChanged()
+            } else {
+                presentImporter(.font)
+            }
+        default:
+            break
+        }
+    }
+
+    private func presentImporter(_ kind: ImportKind) {
+        importKind = kind
+        // .tmTheme không có kiểu hệ thống riêng nên cho chọn mọi file rồi tự kiểm tra nội dung.
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item], asCopy: true)
+        picker.allowsMultipleSelection = false
+        picker.delegate = self
+        present(picker, animated: true)
+    }
+
+    // MARK: Xoá theme / font đã nhập
+
+    override func tableView(_ tableView: UITableView,
+                            trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        func deleteAction(_ run: @escaping () -> Void) -> UISwipeActionsConfiguration {
+            let a = UIContextualAction(style: .destructive, title: "Xoá") { _, _, done in run(); done(true) }
+            return UISwipeActionsConfiguration(actions: [a])
+        }
+        switch Section(rawValue: indexPath.section)! {
+        case .theme where indexPath.row < themes.count && themes[indexPath.row].isCustom:
+            let target = themes[indexPath.row]
+            return deleteAction { [weak self] in
+                ThemeStore.shared.delete(target)
+                if SettingsStore.shared.settings.themeName == target.id {
+                    SettingsStore.shared.update { $0.themeName = "dark" }
+                }
+                self?.refreshColors()
+                self?.tableView.reloadData()
+                self?.settingsChanged()
+            }
+        case .font where indexPath.row >= 1 && indexPath.row <= fonts.count:
+            let target = fonts[indexPath.row - 1]
+            return deleteAction { [weak self] in
+                FontStore.shared.delete(target)
+                let still = SettingsStore.shared.settings.fontName.map { FontStore.shared.contains(postScriptName: $0) } ?? true
+                if !still { SettingsStore.shared.update { $0.fontName = nil } }
+                self?.tableView.reloadData()
+                self?.settingsChanged()
+            }
+        default:
+            return nil
+        }
     }
 
     @objc private func stepperChanged(_ s: UIStepper) {
         SettingsStore.shared.update { $0.fontSize = s.value }
         sizeLabel?.text = "\(Int(s.value)) pt"
-        previewLabel?.font = .monospacedSystemFont(ofSize: CGFloat(s.value), weight: .regular)
+        previewLabel?.font = Appearance.codeFont()
         settingsChanged()
+    }
+}
+
+// MARK: - Nhận file nhập vào
+
+extension SettingsViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        do {
+            switch importKind {
+            case .theme:
+                let theme = try ThemeStore.shared.importTheme(from: url)
+                SettingsStore.shared.update { $0.themeName = theme.id }   // dùng luôn theme vừa nhập
+                refreshColors()
+            case .font:
+                let font = try FontStore.shared.importFont(from: url)
+                SettingsStore.shared.update { $0.fontName = font.postScriptName }
+            }
+            tableView.reloadData()
+            settingsChanged()
+        } catch {
+            fail(error.localizedDescription)
+        }
     }
 }

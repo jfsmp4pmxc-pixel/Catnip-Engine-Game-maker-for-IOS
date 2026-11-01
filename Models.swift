@@ -38,6 +38,8 @@ struct Theme: Codable {
     var border: String
     var hover: String
     var tokens: [TokenKind: String]
+    /// Theme do người dùng nhập có khoá dạng "custom:<tên file>"; theme có sẵn thì để nil.
+    var key: String? = nil
 
     var bgColor: UIColor    { UIColor(hex: bg) ?? .black }
     var bg2Color: UIColor   { UIColor(hex: bg2) ?? .black }
@@ -108,19 +110,29 @@ struct Theme: Codable {
         ]
     )
 
-    static var all: [Theme] { [.dark, .light, .monokai, .solarized] }
+    static var builtIn: [Theme] { [.dark, .light, .monokai, .solarized] }
+    static var all: [Theme] { builtIn + ThemeStore.shared.custom }
+
+    var isCustom: Bool { key != nil }
 
     /// Khoá ngắn dùng để lưu vào settings.json.
     var id: String {
+        if let k = key { return k }
         if name.contains("Light") { return "light" }
         if name.contains("Monokai") { return "monokai" }
         if name.contains("Solarized") { return "solarized" }
         return "dark"
     }
 
-    var isDark: Bool { self.id != "light" }
+    /// Nền tối hay sáng, tính theo độ sáng của màu nền (đúng cả với theme nhập từ ngoài).
+    var isDark: Bool {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        bgColor.getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) < 0.5
+    }
 
     static func byName(_ n: String) -> Theme {
+        if n.hasPrefix("custom:") { return ThemeStore.shared.theme(forKey: n) ?? .dark }
         switch n {
         case "light":     return .light
         case "monokai":   return .monokai

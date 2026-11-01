@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!-- Catnip Engine - trang xem Markdown (GPL-3.0-or-later). Các @@TÊN@@ được Swift thay khi tạo trang. -->
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="@@SCHEME@@">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src catnip-project: https: data:; media-src catnip-project:; style-src 'nonce-@@NONCE@@'; script-src 'nonce-@@NONCE@@'">
+<style nonce="@@NONCE@@">
+html { -webkit-text-size-adjust: 100%; background: @@BG@@; }
+body { margin: 0; background: @@BG@@; }
+.markdown-body { box-sizing: border-box; min-width: 200px; max-width: 980px; margin: 0 auto; padding: 24px 16px 48px; }
+@media (min-width: 768px) { .markdown-body { padding: 32px 45px 64px; } }
+.markdown-body pre code.hljs { padding: 0; background: transparent; }
+</style>
+<style nonce="@@NONCE@@">@@MARKDOWN_CSS@@</style>
+<style nonce="@@NONCE@@">@@HLJS_CSS@@</style>
+</head>
+<body>
+<article id="md" class="markdown-body"></article>
+<script nonce="@@NONCE@@">window.CATNIP_SOURCE = @@SOURCE_JSON@@; window.CATNIP_ANCHOR = @@ANCHOR_JSON@@;</script>
+<script nonce="@@NONCE@@">@@LIBS@@</script>
+<script nonce="@@NONCE@@">@@GLUE@@</script>
+</body>
+</html>

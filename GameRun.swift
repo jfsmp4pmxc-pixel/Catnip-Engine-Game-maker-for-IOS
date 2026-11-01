@@ -228,6 +228,8 @@ private final class OverlayViewController: UIViewController {
     private let logButton = UIButton(type: .system)
     private var collapsed = false
 
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { OrientationPolicy.mask }
+
     override func loadView() {
         let v = UIView()
         v.backgroundColor = .clear

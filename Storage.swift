@@ -65,6 +65,8 @@ struct AppSettings: Codable {
     var expandedFolders: [String] = []
     var showLineNumbers: Bool = true
     var wrapLines: Bool = false      // false = không ngắt dòng (cuộn ngang)
+    var lockPortrait: Bool = false   // true = luôn giữ chiều dọc (cả màn hình lẫn bàn phím)
+    var fontName: String?            // PostScript name của font editor; nil = font hệ thống
 
     init() {}
 
@@ -78,6 +80,8 @@ struct AppSettings: Codable {
         expandedFolders = try c.decodeIfPresent([String].self, forKey: .expandedFolders) ?? []
         showLineNumbers = try c.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? true
         wrapLines       = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? false
+        lockPortrait    = try c.decodeIfPresent(Bool.self, forKey: .lockPortrait) ?? false
+        fontName        = try c.decodeIfPresent(String.self, forKey: .fontName)
     }
 }
 
