@@ -115,6 +115,9 @@ jobs:
                 - Fonts.swift
                 - Themes.swift
                 - MarkdownPreview.swift
+                - LoveAPI.swift
+                - Completion.swift
+                - EditorSuggest.swift
                 - path: Resources
                   buildPhase: resources
           YML
@@ -218,6 +221,12 @@ jobs:
           rm -rf Payload "$OUT_NAME"
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
+          # Cho phép xem thư mục Documents (các dự án) trong app Tệp: On My iPhone > Catnip.
+          PLIST="Payload/Catnip.app/Info.plist"
+          for KEY in UIFileSharingEnabled LSSupportsOpeningDocumentsInPlace; do
+            /usr/libexec/PlistBuddy -c "Delete :$KEY" "$PLIST" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :$KEY bool true" "$PLIST"
+          done
           rm -rf Payload/Catnip.app/_CodeSignature Payload/Catnip.app/embedded.mobileprovision
           zip -qry "$OUT_NAME" Payload
           echo "=== IPA info ==="

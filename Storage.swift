@@ -28,12 +28,47 @@ enum CatnipPaths {
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return base.appendingPathComponent("Catnip", isDirectory: true)
     }
-    static var projects: URL { root.appendingPathComponent("Projects", isDirectory: true) }
+    /// Dự án nằm trực tiếp trong Documents của app: Documents/<tên dự án>.
+    static var projects: URL {
+        fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    }
+    /// Nơi lưu dự án ở các phiên bản trước (chỉ dùng để chuyển dữ liệu sang Documents).
+    static var legacyProjects: URL { root.appendingPathComponent("Projects", isDirectory: true) }
     static var settingsFile: URL { root.appendingPathComponent("settings.json") }
 
-    /// Tạo sẵn các thư mục cần thiết. Application Support nằm trong sandbox và được iOS sao lưu cùng thiết bị.
+    /// Tên thư mục trong Documents mà hệ thống dùng, không phải dự án.
+    static let reservedProjectNames: Set<String> = ["Inbox"]
+
+    /// Tạo sẵn các thư mục cần thiết (cài đặt/font/theme ở Application Support, dự án ở Documents)
+    /// rồi chuyển dự án cũ sang Documents một lần.
     static func prepare() {
+        try? fm.createDirectory(at: root, withIntermediateDirectories: true)
         try? fm.createDirectory(at: projects, withIntermediateDirectories: true)
+        migrateLegacyProjects()
+    }
+
+    /// Chuyển Application Support/Catnip/Projects/* sang Documents. Chạy lại nhiều lần vẫn an toàn:
+    /// trùng tên thì thêm số, không bao giờ ghi đè dự án đã có.
+    private static func migrateLegacyProjects() {
+        let old = legacyProjects
+        guard let items = try? fm.contentsOfDirectory(at: old, includingPropertiesForKeys: [.isDirectoryKey],
+                                                      options: [.skipsHiddenFiles]) else { return }
+        for src in items {
+            guard (try? src.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+            var name = src.lastPathComponent
+            if reservedProjectNames.contains(name) { name += " (cũ)" }
+            var dst = projects.appendingPathComponent(name, isDirectory: true)
+            var n = 2
+            while fm.fileExists(atPath: dst.path) {
+                dst = projects.appendingPathComponent("\(name) \(n)", isDirectory: true)
+                n += 1
+            }
+            try? fm.moveItem(at: src, to: dst)
+        }
+        // Chỉ xoá thư mục cũ khi đã trống, để không mất dữ liệu nếu có bước chuyển thất bại.
+        if (try? fm.contentsOfDirectory(atPath: old.path))?.isEmpty == true {
+            try? fm.removeItem(at: old)
+        }
     }
 }
 
@@ -190,7 +225,7 @@ final class ProjectStore {
     }
 
     static func isValidProjectName(_ n: String) -> Bool {
-        !n.contains("/") && isValidRelativePath(n)
+        !n.contains("/") && isValidRelativePath(n) && !CatnipPaths.reservedProjectNames.contains(n)
     }
 
     // MARK: Projects
@@ -206,6 +241,7 @@ final class ProjectStore {
         return items
             .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
             .map { $0.lastPathComponent }
+            .filter { !CatnipPaths.reservedProjectNames.contains($0) }
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
@@ -436,5 +472,49 @@ final class ProjectStore {
         let url = try fileURL(project, path)
         do { try fm.removeItem(at: url) }
         catch { throw StoreError.io(error.localizedDescription) }
+    }
+
+    /// Sao chép hoặc di chuyển một file/thư mục sang `folder` (nil = gốc) của `toProject`.
+    /// Trùng tên thì thêm " copy"/số. Trả về đường dẫn tương đối mới.
+    /// Di chuyển trong cùng một vị trí thì không làm gì và trả về đường dẫn cũ.
+    @discardableResult
+    func transfer(fromProject: String, path: String, toProject: String, folder: String?, move: Bool) throws -> String {
+        let src = try fileURL(fromProject, path)
+        guard fm.fileExists(atPath: src.path) else { throw StoreError.notFound }
+        let rel = folder ?? ""
+        if !rel.isEmpty, !Self.isValidRelativePath(rel) { throw StoreError.invalidName }
+        let dir = rel.isEmpty ? projectURL(toProject) : projectURL(toProject).appendingPathComponent(rel)
+
+        // Không cho dán thư mục vào chính nó hoặc vào thư mục con của nó.
+        let srcStd = src.standardizedFileURL.path
+        let dirStd = dir.standardizedFileURL.path
+        if dirStd == srcStd || dirStd.hasPrefix(srcStd + "/") { throw StoreError.io("Không thể dán thư mục vào chính nó") }
+
+        let name = (path as NSString).lastPathComponent
+        let sameSpot = dir.appendingPathComponent(name).standardizedFileURL.path == srcStd
+        if move && sameSpot { return path }
+
+        let base = (name as NSString).deletingPathExtension
+        let ext = (name as NSString).pathExtension
+        func make(_ suffix: String) -> String { ext.isEmpty ? name + suffix : "\(base)\(suffix).\(ext)" }
+        var candidate = name
+        if fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
+            candidate = make(" copy")
+            var n = 2
+            while fm.fileExists(atPath: dir.appendingPathComponent(candidate).path) {
+                candidate = make(" copy \(n)"); n += 1
+            }
+        }
+        let dst = dir.appendingPathComponent(candidate)
+        do {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+            if move && fromProject == toProject {
+                try fm.moveItem(at: src, to: dst)
+            } else {
+                try fm.copyItem(at: src, to: dst)
+                if move { try fm.removeItem(at: src) }
+            }
+        } catch { throw StoreError.io(error.localizedDescription) }
+        return rel.isEmpty ? candidate : rel + "/" + candidate
     }
 }

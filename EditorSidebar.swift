@@ -20,6 +20,11 @@
 import UIKit
 import UniformTypeIdentifiers
 
+/// Bộ nhớ tạm cho sao chép/cắt file và thư mục; dùng chung giữa các dự án trong cùng phiên chạy.
+enum ProjectClipboard {
+    static var item: (project: String, path: String, isCut: Bool)?
+}
+
 extension EditorViewController {
 
     // MARK: Trạng thái mở/đóng thư mục (lưu trong settings.json, theo từng dự án)
@@ -81,6 +86,8 @@ extension EditorViewController {
         let newFile = headerButton("doc.badge.plus") { [weak self] in self?.newFilePrompt(in: nil) }
         let newFolder = headerButton("folder.badge.plus") { [weak self] in self?.newFolderPrompt(in: nil) }
         let importBtn = headerButton("square.and.arrow.down.on.square") { [weak self] in self?.importFiles(into: nil) }
+        let pasteBtn = headerButton("doc.on.clipboard") { [weak self] in self?.pasteEntry(into: nil) }
+        sidebarHeader.addSubview(pasteBtn)
         sidebarHeader.addSubview(importBtn)
         sidebarHeader.addSubview(newFile)
         sidebarHeader.addSubview(newFolder)
@@ -114,7 +121,7 @@ extension EditorViewController {
 
             sidebarTitle.leadingAnchor.constraint(equalTo: sidebarHeader.leadingAnchor, constant: 14),
             sidebarTitle.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
-            sidebarTitle.trailingAnchor.constraint(lessThanOrEqualTo: importBtn.leadingAnchor, constant: -8),
+            sidebarTitle.trailingAnchor.constraint(lessThanOrEqualTo: pasteBtn.leadingAnchor, constant: -8),
 
             newFolder.trailingAnchor.constraint(equalTo: sidebarHeader.trailingAnchor, constant: -6),
             newFolder.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
@@ -122,6 +129,8 @@ extension EditorViewController {
             newFile.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
             importBtn.trailingAnchor.constraint(equalTo: newFile.leadingAnchor),
             importBtn.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
+            pasteBtn.trailingAnchor.constraint(equalTo: importBtn.leadingAnchor),
+            pasteBtn.centerYAnchor.constraint(equalTo: sidebarHeader.centerYAnchor),
 
             fileTable.topAnchor.constraint(equalTo: sidebarHeader.bottomAnchor),
             fileTable.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
@@ -245,6 +254,36 @@ extension EditorViewController {
         }
     }
 
+    func copyEntry(_ e: FileEntry, cut: Bool) {
+        ProjectClipboard.item = (project, e.path, cut)
+        flash(cut ? "✂︎ Đã cắt \(e.name)" : "⎘ Đã sao chép \(e.name)")
+    }
+
+    /// Dán vào `folder` (nil = gốc dự án). Cắt thì chuyển đi và cập nhật cây, file đang mở, thư mục đang mở.
+    func pasteEntry(into folder: String?) {
+        guard let clip = ProjectClipboard.item else { flash("Chưa có gì để dán"); return }
+        flushSave()
+        do {
+            let newPath = try store.transfer(fromProject: clip.project, path: clip.path,
+                                             toProject: project, folder: folder, move: clip.isCut)
+            if clip.isCut {
+                ProjectClipboard.item = nil
+                if clip.project == project, newPath != clip.path {
+                    expanded = Set(expanded.map { remap($0, from: clip.path, to: newPath) })
+                    if let cur = currentPath {
+                        let mapped = remap(cur, from: clip.path, to: newPath)
+                        if mapped != cur { isDirty = false; revealParents(of: newPath); reloadTree(); openFile(mapped); return }
+                    }
+                }
+            }
+            if let f = folder { expanded.insert(f) }
+            revealParents(of: newPath)
+            saveExpanded()
+            reloadTree()
+            flash("✓ Đã dán \((newPath as NSString).lastPathComponent)")
+        } catch { showError(error) }
+    }
+
     func deleteEntry(_ e: FileEntry) {
         confirmDestructive(
             title: "Xoá \"\(e.name)\"?",
@@ -328,6 +367,20 @@ extension EditorViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView,
+                   leadingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        let e = entries[indexPath.row]
+        let copy = UIContextualAction(style: .normal, title: "Chép") { [weak self] _, _, done in
+            self?.copyEntry(e, cut: false); done(true)
+        }
+        copy.backgroundColor = Appearance.theme.accentColor
+        let cut = UIContextualAction(style: .normal, title: "Cắt") { [weak self] _, _, done in
+            self?.copyEntry(e, cut: true); done(true)
+        }
+        cut.backgroundColor = .systemOrange
+        return UISwipeActionsConfiguration(actions: [copy, cut])
+    }
+
+    func tableView(_ tableView: UITableView,
                    contextMenuConfigurationForRowAt indexPath: IndexPath,
                    point: CGPoint) -> UIContextMenuConfiguration? {
         let e = entries[indexPath.row]
@@ -342,6 +395,22 @@ extension EditorViewController: UITableViewDataSource, UITableViewDelegate {
                 })
                 items.append(UIAction(title: "Nhập file vào đây", image: UIImage(systemName: "square.and.arrow.down")) { _ in
                     self?.importFiles(into: e.path)
+                })
+            }
+            items.append(UIAction(title: "Sao chép", image: UIImage(systemName: "doc.on.doc")) { _ in
+                self?.copyEntry(e, cut: false)
+            })
+            items.append(UIAction(title: "Cắt", image: UIImage(systemName: "scissors")) { _ in
+                self?.copyEntry(e, cut: true)
+            })
+            if ProjectClipboard.item != nil {
+                let target: String? = e.isFolder ? e.path : {
+                    let d = (e.path as NSString).deletingLastPathComponent
+                    return d.isEmpty ? nil : d
+                }()
+                items.append(UIAction(title: e.isFolder ? "Dán vào thư mục này" : "Dán vào đây",
+                                      image: UIImage(systemName: "doc.on.clipboard")) { _ in
+                    self?.pasteEntry(into: target)
                 })
             }
             items.append(UIAction(title: "Đổi tên", image: UIImage(systemName: "pencil")) { _ in
