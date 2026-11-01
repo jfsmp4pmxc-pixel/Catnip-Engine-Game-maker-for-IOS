@@ -19,11 +19,15 @@ Các dòng chip A9 đến các đời mới hơn.
 /
  |___ README.md
  |___ main.swift
- |___ Ui.swift
+ |___ UI.swift
  |___ Storage.swift
  |___ Models.swift
  |___ EditorSidebar.swift
  |___ Editor.swift
+ |___ Catnip-Bridging-Header.h
+ |___ GameRun.swift
+ |___ LoveBridge.h
+ |___ LoveBridge.mm
  |___ .github/
              |___ workflows/
                            |___ main.yml
