@@ -32,7 +32,12 @@ Các dòng chip A9 đến các đời mới hơn.
              |___ workflows/
                            |___ main.yml
 ```
-## Giấy phép
+## tiến trình 
+- [x] trình soạn thảo mã
+- [x] LÖVE
+- [ ] kết nối Github
+- [ ] build
+## giấy phép
 
 Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
 
