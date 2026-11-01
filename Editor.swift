@@ -1,22 +1,26 @@
 //
-//  Catnip Engine: game maker for IOS
+// Catnip Engine: game maker for IOS
 //
-//  Copyright (C) 2026 jfsmp4pmxc-pixel <ihhjnkk@gmail.com>
+// Copyright (C) 2026 jfsmp4pmxc-pixel <ihhjnkk@gmail.com>
 //
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
 //
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
 //
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/>.
-//   
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+//
+
 import UIKit
+
+/// Một mức thụt lề (phím Tab trên thanh phụ và tự thụt khi xuống dòng). Đổi ở đây nếu muốn 4 dấu cách hoặc Tab.
+private let indentUnit = "  "
 
 final class EditorViewController: UIViewController {
 
@@ -26,7 +30,6 @@ final class EditorViewController: UIViewController {
     let store = ProjectStore.shared
     var importFolder: String?
     var isGameRunning = false
-
     var currentPath: String?
     var canEdit = true
     var isDirty = false
@@ -67,8 +70,14 @@ final class EditorViewController: UIViewController {
         self.kind = ProjectStore.shared.kind(of: project)
         super.init(nibName: nil, bundle: nil)
     }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    // MARK: Orientation
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { OrientationPolicy.mask }
+    override var shouldAutorotate: Bool { true }
 
     // MARK: Lifecycle
     override func viewDidLoad() {
@@ -79,17 +88,14 @@ final class EditorViewController: UIViewController {
         titleLabel.numberOfLines = 2
         titleLabel.textAlignment = .center
         titleLabel.lineBreakMode = .byTruncatingMiddle
-
         buildNavItems()
         buildStatusBar()
         buildEditor()
         buildSidebar()
-
         NotificationCenter.default.addObserver(self, selector: #selector(applyTheme),
                                                name: .catnipSettingsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(flushNotification),
                                                name: .catnipFlushNow, object: nil)
-
         SettingsStore.shared.update { $0.lastProject = self.project }
         loadExpanded()
         reloadTree()
@@ -141,17 +147,14 @@ final class EditorViewController: UIViewController {
     private func buildStatusBar() {
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(statusBar)
-
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
         statusLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         statusBar.addSubview(statusLabel)
-
         NSLayoutConstraint.activate([
             statusBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
             statusBar.heightAnchor.constraint(equalToConstant: 26),
-
             statusLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
             statusLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor)
@@ -168,7 +171,9 @@ final class EditorViewController: UIViewController {
         textView.spellCheckingType = .no
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive
-        textView.textContainerInset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
+        // Lề trái 0 + lineFragmentPadding 4: code nằm sát cột số dòng (khoảng ~10pt thay vì ~21pt).
+        textView.textContainerInset = UIEdgeInsets(top: 12, left: 0, bottom: 12, right: 8)
+        textView.textContainer.lineFragmentPadding = 4
         textView.delegate = self
         textView.inputAccessoryView = makeAccessoryBar()
         view.addSubview(textView)
@@ -176,7 +181,7 @@ final class EditorViewController: UIViewController {
         gutter.translatesAutoresizingMaskIntoConstraints = false
         gutter.textView = textView
         view.addSubview(gutter)
-        gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 44)
+        gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 40)
 
         NSLayoutConstraint.activate([
             gutter.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
@@ -310,7 +315,7 @@ final class EditorViewController: UIViewController {
 
     @objc private func saveTapped() {
         guard currentPath != nil, canEdit else { return }
-        isDirty = true   // ép ghi lại dù nội dung không đổi
+        isDirty = true // ép ghi lại dù nội dung không đổi
         if flushSave() { flash("✓ Đã lưu \(currentPath ?? "")") }
     }
 
@@ -334,13 +339,11 @@ final class EditorViewController: UIViewController {
         let window = view.window
         isGameRunning = true
         flash("▶︎ Đang chạy…")
-
         OrientationPolicy.gameRunning = true
         GameLog.shared.clear()
         CatnipLove.logHandler = { GameLog.shared.append($0) }
         CatnipLove.startLogCapture()
         GameRunOverlay.show { CatnipLove.requestQuit() }
-
         // Chạy ở lượt sau để giao diện kịp cập nhật trước khi LÖVE chiếm vòng lặp.
         DispatchQueue.main.async { [weak self] in
             let code = CatnipLove.runGame(atPath: path)
@@ -401,17 +404,18 @@ final class EditorViewController: UIViewController {
         refreshGutter()
     }
 
-    /// Cập nhật bề rộng cột số dòng theo số chữ số của dòng cuối, rồi vẽ lại.
+    /// Cập nhật bảng vị trí đầu dòng, bề rộng cột số dòng theo số chữ số của dòng cuối, rồi vẽ lại.
     func refreshGutter() {
+        // Luôn dựng lại bảng đầu dòng (thanh trạng thái cũng dùng, kể cả khi ẩn số dòng).
+        gutter.rebuildLineStarts()
         guard SettingsStore.shared.settings.showLineNumbers else {
             if gutterWidth.constant != 0 { gutterWidth.constant = 0 }
             return
         }
-        var lines = 1
-        for ch in (textView.text ?? "").utf16 where ch == 10 { lines += 1 }
+        let lines = gutter.lineStarts.count
         let digits = max(2, String(lines).count)
         let digitWidth = ("0" as NSString).size(withAttributes: [.font: gutter.font]).width
-        let w = ceil(CGFloat(digits) * digitWidth) + 18
+        let w = ceil(CGFloat(digits) * digitWidth) + 12
         if abs(gutterWidth.constant - w) > 0.5 { gutterWidth.constant = w }
         gutter.setNeedsDisplay()
     }
@@ -492,8 +496,8 @@ final class EditorViewController: UIViewController {
         guard currentPath != nil else { return "Chọn hoặc tạo một file ở thanh bên" }
         let ns = (textView.text ?? "") as NSString
         let loc = min(textView.selectedRange.location, ns.length)
-        var line = 1
-        for ch in ns.substring(to: loc).utf16 where ch == 10 { line += 1 }
+        // Dùng bảng đầu dòng đã cache thay vì quét lại cả file mỗi lần di con trỏ.
+        let line = gutter.paragraphIndex(of: loc) + 1
         let lineStart = ns.lineRange(for: NSRange(location: loc, length: 0)).location
         let col = loc - lineStart + 1
         return "\(language.displayName) · Dòng \(line), Cột \(col) · \(ns.length) ký tự"
@@ -533,7 +537,7 @@ final class EditorViewController: UIViewController {
         hide.translatesAutoresizingMaskIntoConstraints = false
         bar.addSubview(hide)
 
-        stack.addArrangedSubview(makeKey(symbol: "arrow.right.to.line") { [weak self] in self?.textView.insertText("  ") })
+        stack.addArrangedSubview(makeKey(symbol: "arrow.right.to.line") { [weak self] in self?.textView.insertText(indentUnit) })
         stack.addArrangedSubview(makeKey(symbol: "arrow.uturn.backward") { [weak self] in self?.textView.undoManager?.undo() })
         stack.addArrangedSubview(makeKey(symbol: "arrow.uturn.forward") { [weak self] in self?.textView.undoManager?.redo() })
         for (o, c) in [("(", ")"), ("{", "}"), ("[", "]"), ("\"", "\""), ("'", "'")] {
@@ -593,9 +597,7 @@ final class EditorViewController: UIViewController {
 }
 
 // MARK: - UITextViewDelegate
-
 extension EditorViewController: UITextViewDelegate {
-
     func textViewDidChange(_ textView: UITextView) {
         guard canEdit else { return }
         if !isDirty { isDirty = true; updateTitle() }
@@ -621,7 +623,7 @@ extension EditorViewController: UITextViewDelegate {
         let lineStart = ns.lineRange(for: NSRange(location: range.location, length: 0)).location
         let before = ns.substring(with: NSRange(location: lineStart, length: range.location - lineStart))
         var indent = String(before.prefix(while: { $0 == " " || $0 == "\t" }))
-        if opensBlock(before.trimmingCharacters(in: .whitespaces)) { indent += "  " }
+        if opensBlock(before.trimmingCharacters(in: .whitespaces)) { indent += indentUnit }
         tv.insertText("\n" + indent)
         return false
     }
@@ -644,7 +646,6 @@ extension EditorViewController: UITextViewDelegate {
 }
 
 // MARK: - Cột số dòng
-
 /// Vẽ số dòng bên trái editor, đồng bộ với layoutManager của textView.
 /// Với dòng bị xuống hàng, chỉ đánh số ở phần đầu của dòng.
 final class LineNumberGutter: UIView {
@@ -653,17 +654,42 @@ final class LineNumberGutter: UIView {
     var textColor = UIColor.gray
     var lineColor = UIColor.separator
 
+    /// Vị trí (UTF-16) bắt đầu của từng đoạn/dòng. Luôn có ít nhất một phần tử (0).
+    private(set) var lineStarts: [Int] = [0]
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         contentMode = .redraw
         isUserInteractionEnabled = false
     }
+
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// Quét văn bản một lần mỗi khi nội dung đổi, thay vì quét lại ở mỗi lần vẽ.
+    func rebuildLineStarts() {
+        var starts = [0]
+        var i = 0
+        for ch in (textView?.text ?? "").utf16 {
+            i += 1
+            if ch == 10 { starts.append(i) }
+        }
+        lineStarts = starts
+    }
+
+    /// Chỉ số đoạn (bắt đầu từ 0) chứa ký tự ở vị trí `char`, tìm nhị phân.
+    func paragraphIndex(of char: Int) -> Int {
+        var lo = 0, hi = lineStarts.count - 1
+        while lo < hi {
+            let mid = (lo + hi + 1) / 2
+            if lineStarts[mid] <= char { lo = mid } else { hi = mid - 1 }
+        }
+        return lo
+    }
 
     override func draw(_ rect: CGRect) {
         guard let tv = textView else { return }
         let lm = tv.layoutManager
-        let text = (tv.text ?? "") as NSString
+        let text = tv.textStorage.string as NSString
         let offsetY = tv.contentOffset.y
         let topInset = tv.textContainerInset.top
         let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: textColor]
@@ -677,20 +703,17 @@ final class LineNumberGutter: UIView {
             let s = "\(n)" as NSString
             let size = s.size(withAttributes: attrs)
             let y = lineRect.minY + topInset - offsetY + (lineRect.height - size.height) / 2
-            s.draw(at: CGPoint(x: width - 8 - size.width, y: y), withAttributes: attrs)
+            s.draw(at: CGPoint(x: width - 6 - size.width, y: y), withAttributes: attrs)
         }
 
         let visible = CGRect(x: 0, y: offsetY - topInset,
                              width: max(tv.textContainer.size.width, 1), height: bounds.height)
         let glyphs = lm.glyphRange(forBoundingRect: visible, in: tv.textContainer)
-
         if glyphs.length > 0 {
             let firstChar = lm.characterIndexForGlyph(at: glyphs.location)
-            var newlinesBefore = 0
-            for ch in text.substring(to: firstChar).utf16 where ch == 10 { newlinesBefore += 1 }
+            let idx = paragraphIndex(of: firstChar)
             let firstStartsParagraph = firstChar == 0 || text.character(at: firstChar - 1) == 10
-            var next = newlinesBefore + (firstStartsParagraph ? 1 : 2)
-
+            var next = idx + (firstStartsParagraph ? 1 : 2)
             lm.enumerateLineFragments(forGlyphRange: glyphs) { lineRect, _, _, lineGlyphs, _ in
                 let chars = lm.characterRange(forGlyphRange: lineGlyphs, actualGlyphRange: nil)
                 let startsParagraph = chars.location == 0 || text.character(at: chars.location - 1) == 10
@@ -704,9 +727,7 @@ final class LineNumberGutter: UIView {
         // Dòng cuối rỗng (văn bản trống hoặc kết thúc bằng xuống dòng)
         let extra = lm.extraLineFragmentRect
         if extra.height > 0 {
-            var total = 1
-            for ch in (text as String).utf16 where ch == 10 { total += 1 }
-            drawNumber(total, in: extra)
+            drawNumber(lineStarts.count, in: extra)
         }
     }
 }
