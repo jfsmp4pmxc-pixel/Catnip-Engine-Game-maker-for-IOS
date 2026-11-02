@@ -112,9 +112,9 @@ final class ProjectListViewController: UIViewController {
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .add, target: self, action: #selector(addTapped))
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "gearshape"), style: .plain,
-            target: self, action: #selector(settingsTapped))
+        updateLeftItems()
+        NotificationCenter.default.addObserver(self, selector: #selector(updateLeftItems),
+                                               name: .catnipSettingsChanged, object: nil)
 
         table.translatesAutoresizingMaskIntoConstraints = false
         table.dataSource = self
@@ -174,6 +174,24 @@ final class ProjectListViewController: UIViewController {
         let nav = CatnipNavigationController(rootViewController: SettingsViewController())
         present(nav, animated: true)
     }
+
+    /// Nút bên trái: Cài đặt, "?" (tài liệu) và, nếu đã bật trong Cài đặt, Shell.
+    @objc private func updateLeftItems() {
+        var items = [
+            UIBarButtonItem(image: UIImage(systemName: "gearshape"), style: .plain,
+                            target: self, action: #selector(settingsTapped)),
+            UIBarButtonItem(image: UIImage(systemName: "questionmark.circle"), style: .plain,
+                            target: self, action: #selector(docsTapped))
+        ]
+        if SettingsStore.shared.settings.shellEnabled {
+            items.append(UIBarButtonItem(image: UIImage(systemName: "terminal"), style: .plain,
+                                         target: self, action: #selector(shellTapped)))
+        }
+        navigationItem.leftBarButtonItems = items
+    }
+
+    @objc private func docsTapped() { presentDocs() }
+    @objc private func shellTapped() { presentShell() }
 
     @objc private func addTapped() {
         let sheet = UIAlertController(title: "Loại dự án", message: "Chọn loại cho dự án mới", preferredStyle: .actionSheet)
@@ -300,7 +318,7 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
 final class SettingsViewController: UITableViewController {
 
     private enum Section: Int, CaseIterable {
-        case theme, font, size, editing, screen
+        case theme, font, size, editing, screen, tools
 
         var title: String {
             switch self {
@@ -309,6 +327,7 @@ final class SettingsViewController: UITableViewController {
             case .size:    return "CỠ CHỮ (2–32 pt)"
             case .editing: return "SOẠN THẢO"
             case .screen:  return "MÀN HÌNH"
+            case .tools:   return "CÔNG CỤ"
             }
         }
     }
@@ -366,6 +385,7 @@ final class SettingsViewController: UITableViewController {
         case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để xoá theme đã nhập."
         case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
+        case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Thư mục gốc của shell là Documents, nơi lưu các dự án."
         default:      return nil
         }
     }
@@ -385,6 +405,7 @@ final class SettingsViewController: UITableViewController {
         case .size:    return 2                         // bộ chỉnh + dòng xem trước
         case .editing: return 2
         case .screen:  return 1
+        case .tools:   return 1
         }
     }
 
@@ -476,6 +497,12 @@ final class SettingsViewController: UITableViewController {
             switchCell(cell, text: "Khoá chiều dọc", isOn: st.lockPortrait) { [weak self] on in
                 SettingsStore.shared.update { $0.lockPortrait = on }
                 OrientationPolicy.refresh()
+                self?.settingsChanged()
+            }
+
+        case .tools:
+            switchCell(cell, text: "Cửa sổ shell", isOn: st.shellEnabled) { [weak self] on in
+                SettingsStore.shared.update { $0.shellEnabled = on }
                 self?.settingsChanged()
             }
         }

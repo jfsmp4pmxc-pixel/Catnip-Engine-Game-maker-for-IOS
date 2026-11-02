@@ -102,6 +102,7 @@ struct AppSettings: Codable {
     var wrapLines: Bool = false      // false = không ngắt dòng (cuộn ngang)
     var lockPortrait: Bool = false   // true = luôn giữ chiều dọc (cả màn hình lẫn bàn phím)
     var fontName: String?            // PostScript name của font editor; nil = font hệ thống
+    var shellEnabled: Bool = false   // bật cửa sổ shell (thư mục gốc là Documents)
 
     init() {}
 
@@ -117,6 +118,7 @@ struct AppSettings: Codable {
         wrapLines       = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? false
         lockPortrait    = try c.decodeIfPresent(Bool.self, forKey: .lockPortrait) ?? false
         fontName        = try c.decodeIfPresent(String.self, forKey: .fontName)
+        shellEnabled    = try c.decodeIfPresent(Bool.self, forKey: .shellEnabled) ?? false
     }
 }
 

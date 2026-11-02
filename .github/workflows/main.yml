@@ -115,6 +115,8 @@ jobs:
                 - Fonts.swift
                 - Themes.swift
                 - MarkdownPreview.swift
+                - Docs.swift
+                - Shell.swift
                 - path: Resources
                   buildPhase: resources
           YML

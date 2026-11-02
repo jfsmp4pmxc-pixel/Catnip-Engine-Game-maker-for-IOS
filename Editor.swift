@@ -48,6 +48,7 @@ final class EditorViewController: UIViewController {
     var saveItem: UIBarButtonItem!
     var previewItem: UIBarButtonItem!
     var runItem: UIBarButtonItem!
+    var helpItem: UIBarButtonItem!
 
     let sidebar = UIView()
     let sidebarHeader = UIView()
@@ -130,6 +131,8 @@ final class EditorViewController: UIViewController {
                                       style: .plain, target: self, action: #selector(previewTapped))
         runItem = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
                                   style: .plain, target: self, action: #selector(runTapped))
+        helpItem = UIBarButtonItem(image: UIImage(systemName: "questionmark.circle"),
+                                   style: .plain, target: self, action: #selector(helpTapped))
         // Menu "⋯": Log, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
         langItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: nil)
         rebuildLanguageMenu()
@@ -141,6 +144,7 @@ final class EditorViewController: UIViewController {
         var items: [UIBarButtonItem] = [langItem, saveItem]
         if kind.canRun { items.append(runItem) }
         if language == .markdown { items.append(previewItem) }
+        items.append(helpItem)
         navigationItem.rightBarButtonItems = items
     }
 
@@ -199,6 +203,7 @@ final class EditorViewController: UIViewController {
     // MARK: Theme
     @objc func applyTheme() {
         let t = Appearance.theme
+        rebuildLanguageMenu()   // menu ⋯ có mục Shell phụ thuộc cài đặt
         Appearance.style(navigationController)
         view.backgroundColor = t.bg2Color
         statusBar.backgroundColor = t.bg2Color
@@ -361,6 +366,11 @@ final class EditorViewController: UIViewController {
         #endif
     }
 
+    @objc func helpTapped() {
+        textView.resignFirstResponder()
+        presentDocs()
+    }
+
     @objc func settingsTapped() {
         textView.resignFirstResponder()
         present(CatnipNavigationController(rootViewController: SettingsViewController()), animated: true)
@@ -454,6 +464,12 @@ final class EditorViewController: UIViewController {
         if kind.canRun {
             top.append(UIAction(title: "Xem log lần chạy gần nhất", image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
                 self?.logTapped()
+            })
+        }
+        if SettingsStore.shared.settings.shellEnabled {
+            top.append(UIAction(title: "Cửa sổ shell", image: UIImage(systemName: "terminal")) { [weak self] _ in
+                self?.textView.resignFirstResponder()
+                self?.presentShell()
             })
         }
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
