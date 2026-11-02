@@ -25,6 +25,8 @@ on:
         type: choice
         options:
           - Release
+          - Preview
+          - Beta
           - Debug
       with_love:
         description: "Nhúng lõi LÖVE (nút Chạy). Tắt nếu cần build nhanh chỉ phần editor"
