@@ -33,13 +33,7 @@ final class EditorViewController: UIViewController {
     var currentPath: String?
     var canEdit = true
     var isDirty = false
-    var language: Language = .plaintext {
-        didSet { if language != oldValue { refreshSuggestions() } }
-    }
-    // Gợi ý code (Lua/LÖVE)
-    var accessory: AccessoryContainer?
-    var suggestStrip: SuggestionStrip?
-    var suggestRange = NSRange(location: 0, length: 0)
+    var language: Language = .plaintext
     var expanded = Set<String>()
     var entries: [FileEntry] = []
 
@@ -523,27 +517,8 @@ final class EditorViewController: UIViewController {
 
     // MARK: Keyboard accessory bar (phím tắt cho code)
     private func makeAccessoryBar() -> UIView {
-        let container = AccessoryContainer()
-        let bar = UIView()
-        bar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(bar)
-
-        let strip = SuggestionStrip()
-        strip.translatesAutoresizingMaskIntoConstraints = false
-        strip.onPick = { [weak self] s in self?.applySuggestion(s) }
-        container.addSubview(strip)
-        accessory = container
-        suggestStrip = strip
-        NSLayoutConstraint.activate([
-            bar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            bar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            bar.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            bar.heightAnchor.constraint(equalToConstant: AccessoryContainer.keysHeight),
-            strip.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            strip.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            strip.topAnchor.constraint(equalTo: container.topAnchor),
-            strip.heightAnchor.constraint(equalToConstant: AccessoryContainer.stripHeight)
-        ])
+        let bar = UIInputView(frame: CGRect(x: 0, y: 0, width: 0, height: 44), inputViewStyle: .keyboard)
+        bar.autoresizingMask = .flexibleWidth
 
         let scroll = UIScrollView()
         scroll.translatesAutoresizingMaskIntoConstraints = false
@@ -588,7 +563,7 @@ final class EditorViewController: UIViewController {
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor)
         ])
-        return container
+        return bar
     }
 
     private func makeKey(title: String? = nil, symbol: String? = nil,
@@ -630,16 +605,10 @@ extension EditorViewController: UITextViewDelegate {
         scheduleHighlight()
         refreshGutter()
         updateStatus()
-        refreshSuggestions()
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
         updateStatus()
-        refreshSuggestions()
-    }
-
-    func textViewDidEndEditing(_ textView: UITextView) {
-        hideSuggestions()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

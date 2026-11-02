@@ -115,9 +115,6 @@ jobs:
                 - Fonts.swift
                 - Themes.swift
                 - MarkdownPreview.swift
-                - LoveAPI.swift
-                - Completion.swift
-                - EditorSuggest.swift
                 - path: Resources
                   buildPhase: resources
           YML
