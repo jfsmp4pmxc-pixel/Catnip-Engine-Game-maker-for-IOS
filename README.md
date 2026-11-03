@@ -8,13 +8,10 @@
 ## công nghệ
 - Catnip được viết bằng Swift, Obj-C và **sử dụng** LÖVE framework để chạy các chương trình mà bạn viết.
 - Phiên bản LÖVE là 12.0
-## yêu cầu
-```txt
-IOS 15 trở lên.
-Các dòng chip A9 đến các đời mới hơn.
-```
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
+> [INPORTANT] Catnip yêu cầu IOS 15 trở lên 
+> [INTORTANT] Catnip hỗ trợ rất tốt IOS 15
 
 | IOS    | Ksign | Esign | Trollstore | 
 |--------|:-------:|:-------:|:------------:|
