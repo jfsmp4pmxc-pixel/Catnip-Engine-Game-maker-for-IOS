@@ -10,6 +10,8 @@
 - Phiên bản LÖVE là 12.0
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
+> [!WARNING]
+> Catnip Original **chỉ phân phối chính thức ở repo này**. Tải từ nguồn khác có thể có rủi ro.
 
 > [!TIP]
 > - Catnip yêu cầu IOS 15 trở lên 
