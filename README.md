@@ -17,7 +17,7 @@ Các dòng chip A9 đến các đời mới hơn.
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
 
 | IOS    | Ksign | Esign | Trollstore | 
-|--------|-------|-------|------------|
+|--------|:-------:|:-------:|:------------:|
 |15.0    |  ❌   |  ✅   |    ✅ (khuyến nghị)|
 |15.x    |  ❌   |  ✅   |    ✅ (khuyến nghị)|
 |16.0    |  ✅   |  ✅   |    ✅ (khuyến nghị)|
