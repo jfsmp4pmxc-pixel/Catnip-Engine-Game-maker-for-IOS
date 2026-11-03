@@ -83,18 +83,18 @@
 - [ ] kết nối Github
 - [ ] build
 ## giấy phép
+> [!WARNING]
+> Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
+> 
+> Bạn được tự do:
+> - Sử dụng cho mọi mục đích, kể cả thương mại
+> - Sửa đổi mã nguồn
+> - Fork và phân phối lại
 
-Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
-
-Bạn được tự do:
-- Sử dụng cho mọi mục đích, kể cả thương mại
-- Sửa đổi mã nguồn
-- Fork và phân phối lại
-
-Với điều kiện:
-- **Ghi công tác giả gốc** — giữ nguyên thông báo bản quyền
-- **Công khai mã nguồn** — mọi sản phẩm phái sinh phải dùng cùng giấy phép GPLv3
-- Ghi rõ các thay đổi đã thực hiện so với bản gốc
+> Với điều kiện:
+> - **Ghi công tác giả gốc** — giữ nguyên thông báo bản quyền
+> - **Công khai mã nguồn** — mọi sản phẩm phái sinh phải dùng cùng giấy phép GPLv3
+> - Ghi rõ các thay đổi đã thực hiện so với bản gốc
 
 Xem file [LICENSE](LICENSE) để biết chi tiết đầy đủ.
 
