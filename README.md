@@ -11,11 +11,14 @@
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
 
-> [!INPORTANT]
-> Catnip yêu cầu IOS 15 trở lên 
+> [!IMPORTANT]
+> - **LiveContainer is not supported** due to its own limitations.
+> - Sideloading using a distribution certificate for signing is **not supported**.⁠
+> - Other sideloading methods may be **incompatible with Reynard**, and **no support will be provided** for issues arising from them.
 
-> [!INTORTANT]
-> Catnip hỗ trợ rất tốt IOS 15
+> [!IMPORTANT]
+> - Catnip yêu cầu IOS 15 trở lên 
+> - Catnip hỗ trợ rất tốt IOS 15
 
 | IOS    | Ksign | Esign | Trollstore | 
 |--------|:-------:|:-------:|:------------:|
@@ -30,7 +33,7 @@
 |27.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
 
 > [!COUTION] 
-> Việc cài đặt qua Trollstore cũng có rủi ro. Miễn là bạn tải từ mục "release" (vì bản phát hành tốt hơn bản beta) và bạn không cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
+> - Việc cài đặt qua Trollstore cũng có rủi ro. Miễn là bạn tải từ mục "release" (vì bản phát hành tốt hơn bản beta) và bạn không cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
 
 ## cấu trúc mã nguồn 
 ```txt
