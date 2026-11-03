@@ -10,10 +10,10 @@
 - Phiên bản LÖVE là 12.0
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
-> [INPORTANT] 
+> [!INPORTANT] 
     Catnip yêu cầu IOS 15 trở lên 
 
-> [INTORTANT] 
+> [!INTORTANT] 
     Catnip hỗ trợ rất tốt IOS 15
 
 | IOS    | Ksign | Esign | Trollstore | 
@@ -28,7 +28,7 @@
 |26.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
 |27.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
 
-> [COUTION]
+> [!COUTION]
     Việc cài đặt qua Trollstore cũng có rủi ro. Miễn là bạn tải từ mục "release" (vì bản phát hành tốt hơn bản beta) và bạn không cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
 
 ## cấu trúc mã nguồn 
