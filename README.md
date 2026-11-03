@@ -28,7 +28,7 @@
 |27.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
 
 > [!WARNING] 
-> - Việc **cài đặt qua Trollstore** cũng có **rủi ro**. Miễn là bạn tải từ mục **"release"** (vì bản phát hành tốt hơn bản beta) và bạn không cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
+> - Việc **cài đặt qua Trollstore** cũng có **rủi ro**. Miễn là bạn tải từ mục **"release"** (vì bản phát hành tốt hơn bản beta) và bạn cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
 
 ## cấu trúc mã nguồn 
 ```txt
