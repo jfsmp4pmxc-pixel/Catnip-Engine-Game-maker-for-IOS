@@ -11,7 +11,7 @@
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
 
-> [!IMPORTANT]
+> [!TIP]
 > - Catnip yêu cầu IOS 15 trở lên 
 > - Catnip hỗ trợ rất tốt IOS 15
 
