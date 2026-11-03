@@ -12,11 +12,6 @@
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
 
 > [!IMPORTANT]
-> - **LiveContainer is not supported** due to its own limitations.
-> - Sideloading using a distribution certificate for signing is **not supported**.⁠
-> - Other sideloading methods may be **incompatible with Reynard**, and **no support will be provided** for issues arising from them.
-
-> [!IMPORTANT]
 > - Catnip yêu cầu IOS 15 trở lên 
 > - Catnip hỗ trợ rất tốt IOS 15
 
