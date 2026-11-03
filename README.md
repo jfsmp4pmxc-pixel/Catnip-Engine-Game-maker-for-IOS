@@ -90,7 +90,7 @@
 > - Sử dụng cho mọi mục đích, kể cả thương mại
 > - Sửa đổi mã nguồn
 > - Fork và phân phối lại
-
+>
 > Với điều kiện:
 > - **Ghi công tác giả gốc** — giữ nguyên thông báo bản quyền
 > - **Công khai mã nguồn** — mọi sản phẩm phái sinh phải dùng cùng giấy phép GPLv3
