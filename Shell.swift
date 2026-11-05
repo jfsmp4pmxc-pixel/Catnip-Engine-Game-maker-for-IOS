@@ -473,7 +473,13 @@ final class ShellViewController: UIViewController, UITextFieldDelegate {
 }
 
 extension UIViewController {
+    /// Mở cửa sổ shell: iSH (Linux thật) nếu bản build có nhúng, không thì shell dựng sẵn ở trên.
     func presentShell() {
-        present(CatnipNavigationController(rootViewController: ShellViewController()), animated: true)
+        #if CATNIP_HAS_ISH
+        let vc: UIViewController = IshShellViewController()
+        #else
+        let vc: UIViewController = ShellViewController()
+        #endif
+        present(CatnipNavigationController(rootViewController: vc), animated: true)
     }
 }

@@ -6,5 +6,12 @@
 //  Licensed under GPL-3.0-or-later. See LICENSE.
 //
 
-// Chỉ được dùng khi build có nhúng lõi LÖVE (workflow thêm SWIFT_OBJC_BRIDGING_HEADER).
+// Chỉ được dùng khi build có nhúng LÖVE và/hoặc iSH (workflow đặt SWIFT_OBJC_BRIDGING_HEADER
+// cùng các định nghĩa CATNIP_HAS_LOVE / CATNIP_HAS_ISH tương ứng).
+#ifdef CATNIP_HAS_LOVE
 #import "LoveBridge.h"
+#endif
+
+#ifdef CATNIP_HAS_ISH
+#import "IshBridge.h"
+#endif

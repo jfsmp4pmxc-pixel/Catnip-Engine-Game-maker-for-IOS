@@ -156,3 +156,18 @@ License: Apache-2.0 OR MPL-2.0 (dual-licensed). Catnip uses it under Apache-2.0.
 Full texts: https://www.apache.org/licenses/LICENSE-2.0 and https://www.mozilla.org/MPL/2.0/
 
 The `highlight.min.js`, `purify.min.js` and `markdown-it*.min.js` files are unmodified upstream builds.
+
+## iSH (tùy chọn, khi build với `with_ish`)
+
+https://github.com/ish-app/ish  
+Copyright (c) the iSH authors.  
+License: GPL-3.0 kèm điều khoản bổ sung LICENSE.IOS (cho phép phân phối qua App Store). Catnip cũng dùng GPL-3.0-or-later nên tương thích.  
+Mã nguồn đầy đủ của bản dùng: commit `de5ab2c4b1039551203c1106e75f715cd917544b`.
+
+Gói rootfs Alpine Linux đi kèm do iSH cung cấp (https://github.com/ish-app/roots); các gói bên trong mang giấy phép riêng của từng gói (xem /usr/share/licenses hoặc `apk info -L`).
+
+## SwiftTerm 1.17.0 (tùy chọn, khi build với `with_ish`)
+
+https://github.com/migueldeicaza/SwiftTerm  
+Copyright (c) Miguel de Icaza.  
+License: MIT

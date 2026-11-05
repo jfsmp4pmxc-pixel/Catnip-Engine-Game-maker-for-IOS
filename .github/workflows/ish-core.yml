@@ -1,0 +1,59 @@
+name: Build iSH core (step 1 - verify)
+
+# Bước 1 của việc nhúng iSH (shell Linux) vào Catnip: kiểm chứng rằng CI build được lõi iSH
+# thành thư viện tĩnh cho iOS và tải được rootfs. Workflow này KHÔNG chạm vào app Catnip;
+# xem log + danh sách thư viện để chỉnh bước nhúng nếu cần.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ish_ref:
+        description: "Commit/tag của ish-app/ish"
+        required: true
+        default: "de5ab2c4b1039551203c1106e75f715cd917544b"
+        type: string
+
+jobs:
+  build-ish-core:
+    name: Build iSH core for iOS
+    runs-on: macos-15
+    env:
+      ISH_REF: ${{ inputs.ish_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show context
+        run: xcodebuild -version
+
+      - name: Build iSH core
+        run: tools/build_ish_core.sh
+
+      - name: List products
+        if: always()
+        run: |
+          {
+            echo "== libs =="; ls -lh ish-core/lib 2>/dev/null
+            echo; echo "== root.tar.gz =="; ls -lh ish-core/root.tar.gz 2>/dev/null
+            echo; echo "== all .a in build =="; find ish-core/build -name "*.a" 2>/dev/null
+          } | tee ish-products.txt
+
+      - name: Upload build info
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ish-core-info
+          path: |
+            ish-products.txt
+            ish-core/ish-build.log
+            ish-core/archive-build.log
+            ish-core/repositories.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload libs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ish-core-libs
+          path: ish-core/lib
+          if-no-files-found: error
+          retention-days: 14

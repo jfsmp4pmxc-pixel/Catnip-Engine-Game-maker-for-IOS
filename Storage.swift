@@ -36,8 +36,8 @@ enum CatnipPaths {
     static var legacyProjects: URL { root.appendingPathComponent("Projects", isDirectory: true) }
     static var settingsFile: URL { root.appendingPathComponent("settings.json") }
 
-    /// Tên thư mục trong Documents mà hệ thống dùng, không phải dự án.
-    static let reservedProjectNames: Set<String> = ["Inbox"]
+    /// Tên thư mục trong Documents không phải dự án: Inbox (hệ thống) và iSH (hệ thống file của shell Linux).
+    static let reservedProjectNames: Set<String> = ["Inbox", "iSH"]
 
     /// Tạo sẵn các thư mục cần thiết (cài đặt/font/theme ở Application Support, dự án ở Documents)
     /// rồi chuyển dự án cũ sang Documents một lần.
