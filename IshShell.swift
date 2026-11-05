@@ -120,7 +120,7 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
 
     private func startSession() {
         lastStart = Date()
-        let err = IshBridge.startSession(withOutput: { [weak self] data in
+        let err = IshBridge.startSession(output: { [weak self] data in
             self?.terminalView.feed(byteArray: ArraySlice([UInt8](data)))
         }, exit: { [weak self] code in
             self?.sessionEnded(code: Int(code))
@@ -240,7 +240,7 @@ final class IshShellViewController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        if case .running = runtime.state { runtime.terminalView.becomeFirstResponder() }
+        if case .running = runtime.state { _ = runtime.terminalView.becomeFirstResponder() }
     }
 
     @objc private func applyTheme() {
@@ -267,7 +267,7 @@ final class IshShellViewController: UIViewController {
             statusLabel.text = "Đang khởi động Linux…"
         case .running:
             showOverlay = false
-            runtime.terminalView.becomeFirstResponder()
+            _ = runtime.terminalView.becomeFirstResponder()
         case .failed(let message):
             statusLabel.text = message
             showRetry = true
@@ -278,7 +278,7 @@ final class IshShellViewController: UIViewController {
     }
 
     @objc private func doneTapped() {
-        runtime.terminalView.resignFirstResponder()
+        _ = runtime.terminalView.resignFirstResponder()
         dismiss(animated: true)
     }
 }
