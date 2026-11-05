@@ -4,6 +4,7 @@
 Biến môi trường:
   BUNDLE_ID, MARKETING_VERSION, BUILD_NUMBER      (bắt buộc)
   WITH_LOVE=true  + LOVE_DIR, LOVE_LIB            nhúng lõi LÖVE
+  CONFIG                                          tên cấu hình build (Debug/Release hoặc tên tuỳ ý như Beta, Preview)
   WITH_ISH=true   + ISH_CORE                      nhúng iSH (thư mục ish-core do tools/build_ish_core.sh tạo)
 """
 import os
@@ -105,7 +106,15 @@ def q(v):
     return f'"{s}"'
 
 
-out = ["name: Catnip", "options:", "  deploymentTarget:", '    iOS: "15.0"', "  createIntermediateGroups: true"]
+# Mọi tên cấu hình workflow cho chọn phải có trong project, nếu không Xcode build app và gói SPM
+# vào hai thư mục khác nhau (lỗi "SwiftTerm_SwiftTerm.bundle: No such file"). Tên lạ được coi là bản release.
+configs = {"Debug": "debug", "Release": "release"}
+config = env("CONFIG") or "Release"
+configs.setdefault(config, "release")
+
+out = ["name: Catnip", "configs:"]
+out += [f"  {name}: {kind}" for name, kind in configs.items()]
+out += ["options:", "  deploymentTarget:", '    iOS: "15.0"', "  createIntermediateGroups: true"]
 if packages:
     out.append("packages:")
     for name, p in packages.items():
