@@ -30,6 +30,7 @@
 #include "kernel/init.h"
 #include "kernel/task.h"
 #include "fs/devices.h"
+#include "fs/path.h"
 #include "fs/real.h"
 #include "fs/sock.h"
 #include "fs/tty.h"
