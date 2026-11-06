@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build lõi iSH (Linux x86 usermode emulator) thành thư viện tĩnh cho iOS, và tải rootfs Alpine.
 # Dùng trong CI (macOS). Kết quả nằm ở $OUT (mặc định ish-core/):
-#   ish-core/lib/{libish.a,libish_emu.a,libfakefs.a,libarchive.a}
+#   ish-core/lib/{libish.a,libish_emu.a,libfakefs.a,libfakefs_import.a,libarchive.a}
 #   ish-core/Resources/           root.tar.gz (rootfs Alpine của iSH) + repositories.txt (kho apk, cùng cách iSH tạo)
 #   ish-core/ish/                 mã nguồn iSH (cần header để biên dịch cầu nối)
 # iSH: GPL-3.0 (kèm LICENSE.IOS), https://github.com/ish-app/ish
@@ -42,8 +42,19 @@ xcodebuild -project "$SRC/deps/libarchive.xcodeproj" \
     "${COMMON[@]}" SYMROOT="$BUILD/archive" build 2>&1 | tee "$OUT/archive-build.log" | tail -n 40
 echo "::endgroup::"
 
+echo "::group::Build libfakefs_import (tools/fakefs.c: fakefs_import)"
+# fakefs_import nằm trong tools/fakefs.c, không thuộc target libfakefs nên tự biên dịch.
+ARCHIVE_H=$(find "$SRC/deps/libarchive" -name archive.h | head -n 1)
+test -n "$ARCHIVE_H"
+mkdir -p "$BUILD/import"
+xcrun -sdk iphoneos clang -arch arm64 -miphoneos-version-min=15.0 -O2 -c "$SRC/tools/fakefs.c" \
+    -I"$SRC" -I"$(dirname "$ARCHIVE_H")" \
+    -o "$BUILD/import/fakefs_import.o"
+ar rcs "$BUILD/import/libfakefs_import.a" "$BUILD/import/fakefs_import.o"
+echo "::endgroup::"
+
 echo "::group::Collect libraries"
-for name in libish.a libish_emu.a libfakefs.a libarchive.a; do
+for name in libish.a libish_emu.a libfakefs.a libfakefs_import.a libarchive.a; do
     found=$(find "$BUILD" -name "$name" -not -path "*/Intermediates*" | head -n 1)
     if [ -z "$found" ]; then
         echo "❌ Không tìm thấy $name"; find "$BUILD" -name "*.a" | head -n 40; exit 1

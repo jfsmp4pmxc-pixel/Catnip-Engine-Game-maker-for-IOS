@@ -59,7 +59,7 @@ if with_ish:
     swift_conditions.append("CATNIP_HAS_ISH")
     gcc_defs.append("CATNIP_HAS_ISH=1")
     header_paths.append(f"{core}/ish")
-    ldflags += [f"{core}/lib/{n}" for n in ("libish.a", "libish_emu.a", "libfakefs.a", "libarchive.a")]
+    ldflags += [f"{core}/lib/{n}" for n in ("libish.a", "libish_emu.a", "libfakefs.a", "libfakefs_import.a", "libarchive.a")]
     ldflags += ["-lsqlite3", "-lbz2", "-liconv", "-lresolv", "-lz"]
     packages["SwiftTerm"] = {"url": "https://github.com/migueldeicaza/SwiftTerm", "exactVersion": "1.17.0"}
     deps.append({"package": "SwiftTerm"})
