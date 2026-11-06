@@ -107,9 +107,9 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         let repositories = Bundle.main.path(forResource: "repositories", ofType: "txt")
             .flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
         if !IshBridge.isBooted {
-            let err = IshBridge.boot(root: root.path,
-                                     documents: CatnipPaths.projects.path,
-                                     repositories: repositories)
+            let err = IshBridge.boot(withRoot: root.path,
+                                      documents: CatnipPaths.projects.path,
+                                      repositories: repositories)
             if err < 0 {
                 state = .failed("Không khởi động được kernel iSH (mã \(err)).")
                 return
