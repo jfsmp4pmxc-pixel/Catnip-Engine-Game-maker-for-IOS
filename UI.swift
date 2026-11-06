@@ -32,6 +32,10 @@ enum Appearance {
         CGFloat(min(max(SettingsStore.shared.settings.fontSize, fontSizeRange.lowerBound), fontSizeRange.upperBound))
     }
 
+    static let terminalFontRange: ClosedRange<Double> = 8...32
+    static let markdownFontRange: ClosedRange<Double> = 10...32
+    static var terminalFontSize: CGFloat { CGFloat(SettingsStore.shared.settings.terminalFontSize) }
+
     /// Font của editor: font người dùng đã chọn (nếu còn), không thì font monospace của hệ thống.
     static func codeFont(_ size: CGFloat? = nil) -> UIFont {
         let pt = size ?? fontSize
@@ -318,7 +322,7 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
 final class SettingsViewController: UITableViewController {
 
     private enum Section: Int, CaseIterable {
-        case theme, font, size, editing, screen, tools
+        case theme, font, size, editing, markdown, screen, tools
 
         var title: String {
             switch self {
@@ -326,6 +330,7 @@ final class SettingsViewController: UITableViewController {
             case .font:    return "FONT TRONG EDITOR"
             case .size:    return "CỠ CHỮ (2–32 pt)"
             case .editing: return "SOẠN THẢO"
+            case .markdown: return "TRÌNH XEM MARKDOWN"
             case .screen:  return "MÀN HÌNH"
             case .tools:   return "CÔNG CỤ"
             }
@@ -384,6 +389,8 @@ final class SettingsViewController: UITableViewController {
         switch Section(rawValue: section)! {
         case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để xoá theme đã nhập."
         case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
+        case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật."
+        case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
         case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Thư mục gốc của shell là Documents, nơi lưu các dự án."
         default:      return nil
@@ -403,10 +410,29 @@ final class SettingsViewController: UITableViewController {
         case .theme:   return themes.count + 1          // + "Nhập theme…"
         case .font:    return 1 + fonts.count + 1       // mặc định + font đã nhập + "Nhập font…"
         case .size:    return 2                         // bộ chỉnh + dòng xem trước
-        case .editing: return 2
+        case .editing: return 4
+        case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return 1
+        case .tools:   return 2                         // bật shell + cỡ chữ shell
         }
+    }
+
+    private func stepperCell(_ cell: UITableViewCell, text: String, value: Double, range: ClosedRange<Double>,
+                             format: @escaping (Double) -> String, onChange: @escaping (Double) -> Void) {
+        cell.selectionStyle = .none
+        cell.textLabel?.text = text + ": " + format(value)
+        let stepper = UIStepper()
+        stepper.minimumValue = range.lowerBound
+        stepper.maximumValue = range.upperBound
+        stepper.stepValue = 1
+        stepper.value = value
+        weak var label = cell.textLabel
+        stepper.addAction(UIAction { action in
+            guard let st = action.sender as? UIStepper else { return }
+            label?.text = text + ": " + format(st.value)
+            onChange(st.value)
+        }, for: .valueChanged)
+        cell.accessoryView = stepper
     }
 
     private func switchCell(_ cell: UITableViewCell, text: String, isOn: Bool,
@@ -486,11 +512,36 @@ final class SettingsViewController: UITableViewController {
                     SettingsStore.shared.update { $0.showLineNumbers = on }
                     self?.settingsChanged()
                 }
-            } else {
+            } else if indexPath.row == 1 {
                 switchCell(cell, text: "Tự xuống dòng", isOn: st.wrapLines) { [weak self] on in
                     SettingsStore.shared.update { $0.wrapLines = on }
                     self?.settingsChanged()
                 }
+            } else if indexPath.row == 2 {
+                stepperCell(cell, text: "Kích thước tab", value: Double(st.tabWidth), range: 1...8,
+                            format: { "\(Int($0)) dấu cách" }) { [weak self] v in
+                    SettingsStore.shared.update { $0.tabWidth = Int(v) }
+                    self?.settingsChanged()
+                }
+            } else {
+                switchCell(cell, text: "Thụt lề bằng ký tự Tab", isOn: st.useTabs) { [weak self] on in
+                    SettingsStore.shared.update { $0.useTabs = on }
+                    self?.settingsChanged()
+                }
+            }
+
+        case .markdown:
+            if indexPath.row == 0 {
+                stepperCell(cell, text: "Cỡ chữ", value: st.markdownFontSize, range: Appearance.markdownFontRange,
+                            format: { "\(Int($0)) px" }) { [weak self] v in
+                    SettingsStore.shared.update { $0.markdownFontSize = v }
+                    self?.settingsChanged()
+                }
+            } else {
+                let options = [("auto", "Theo giao diện app"), ("githubLight", "GitHub Sáng"), ("githubDark", "GitHub Tối")]
+                let (key, title) = options[indexPath.row - 1]
+                cell.textLabel?.text = title
+                cell.accessoryType = (st.markdownTheme == key) ? .checkmark : .none
             }
 
         case .screen:
@@ -501,9 +552,17 @@ final class SettingsViewController: UITableViewController {
             }
 
         case .tools:
-            switchCell(cell, text: "Cửa sổ shell", isOn: st.shellEnabled) { [weak self] on in
-                SettingsStore.shared.update { $0.shellEnabled = on }
-                self?.settingsChanged()
+            if indexPath.row == 0 {
+                switchCell(cell, text: "Cửa sổ shell", isOn: st.shellEnabled) { [weak self] on in
+                    SettingsStore.shared.update { $0.shellEnabled = on }
+                    self?.settingsChanged()
+                }
+            } else {
+                stepperCell(cell, text: "Cỡ chữ shell", value: st.terminalFontSize, range: Appearance.terminalFontRange,
+                            format: { "\(Int($0)) pt" }) { [weak self] v in
+                    SettingsStore.shared.update { $0.terminalFontSize = v }
+                    self?.settingsChanged()
+                }
             }
         }
         return cell
@@ -537,6 +596,11 @@ final class SettingsViewController: UITableViewController {
             } else {
                 presentImporter(.font)
             }
+        case .markdown where indexPath.row >= 1:
+            let keys = ["auto", "githubLight", "githubDark"]
+            SettingsStore.shared.update { $0.markdownTheme = keys[indexPath.row - 1] }
+            tableView.reloadSections([Section.markdown.rawValue], with: .none)
+            settingsChanged()
         default:
             break
         }

@@ -166,7 +166,7 @@ final class DocPageViewController: UIViewController, WKNavigationDelegate {
     }
 
     private func render() {
-        let dark = Appearance.theme.isDark
+        let dark = MarkdownPage.isDark(appIsDark: Appearance.theme.isDark)
         let bg = MarkdownPage.backgroundColor(dark: dark)
         view.backgroundColor = bg
         webView.backgroundColor = bg

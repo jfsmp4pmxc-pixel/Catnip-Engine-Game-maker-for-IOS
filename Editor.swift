@@ -19,8 +19,11 @@
 
 import UIKit
 
-/// Một mức thụt lề (phím Tab trên thanh phụ và tự thụt khi xuống dòng). Đổi ở đây nếu muốn 4 dấu cách hoặc Tab.
-private let indentUnit = "  "
+/// Một mức thụt lề (phím Tab trên thanh phụ và tự thụt khi xuống dòng), theo cài đặt: n dấu cách hoặc ký tự Tab.
+private var indentUnit: String {
+    let s = SettingsStore.shared.settings
+    return s.useTabs ? "\t" : String(repeating: " ", count: s.tabWidth)
+}
 
 final class EditorViewController: UIViewController {
 

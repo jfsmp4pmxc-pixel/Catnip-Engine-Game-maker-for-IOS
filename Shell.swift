@@ -433,11 +433,11 @@ final class ShellViewController: UIViewController, UITextFieldDelegate {
         view.backgroundColor = t.bgColor
         output.backgroundColor = t.bgColor
         output.textColor = t.fgColor
-        output.font = Appearance.codeFont(max(Appearance.fontSize, 11))
+        output.font = Appearance.codeFont(Appearance.terminalFontSize)
         bar.backgroundColor = t.bg2Color
-        promptLabel.font = Appearance.codeFont(13)
+        promptLabel.font = Appearance.codeFont(Appearance.terminalFontSize)
         promptLabel.textColor = t.accentColor
-        input.font = Appearance.codeFont(15)
+        input.font = Appearance.codeFont(Appearance.terminalFontSize)
         input.textColor = t.fgColor
         input.tintColor = t.accentColor
         refreshOutput()

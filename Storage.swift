@@ -103,6 +103,11 @@ struct AppSettings: Codable {
     var lockPortrait: Bool = false   // true = luôn giữ chiều dọc (cả màn hình lẫn bàn phím)
     var fontName: String?            // PostScript name của font editor; nil = font hệ thống
     var shellEnabled: Bool = false   // bật cửa sổ shell (thư mục gốc là Documents)
+    var terminalFontSize: Double = 13   // cỡ chữ của shell (iSH và shell tích hợp)
+    var markdownFontSize: Double = 16   // cỡ chữ của trình xem Markdown
+    var markdownTheme: String = "auto"  // "auto" (theo giao diện app), "githubLight", "githubDark"
+    var tabWidth: Int = 2               // số dấu cách của một mức thụt lề
+    var useTabs: Bool = false           // true = thụt lề bằng ký tự Tab
 
     init() {}
 
@@ -119,6 +124,11 @@ struct AppSettings: Codable {
         lockPortrait    = try c.decodeIfPresent(Bool.self, forKey: .lockPortrait) ?? false
         fontName        = try c.decodeIfPresent(String.self, forKey: .fontName)
         shellEnabled    = try c.decodeIfPresent(Bool.self, forKey: .shellEnabled) ?? false
+        terminalFontSize = min(max(try c.decodeIfPresent(Double.self, forKey: .terminalFontSize) ?? 13, 8), 32)
+        markdownFontSize = min(max(try c.decodeIfPresent(Double.self, forKey: .markdownFontSize) ?? 16, 10), 32)
+        markdownTheme   = try c.decodeIfPresent(String.self, forKey: .markdownTheme) ?? "auto"
+        tabWidth        = min(max(try c.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 2, 1), 8)
+        useTabs         = try c.decodeIfPresent(Bool.self, forKey: .useTabs) ?? false
     }
 }
 

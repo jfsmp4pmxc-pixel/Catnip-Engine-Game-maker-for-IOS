@@ -82,6 +82,15 @@ enum MarkdownPage {
             + "<pre style=\"white-space:pre-wrap\">\(escapeHTML(markdown))</pre></body>"
     }
 
+    /// Trình xem tối hay sáng: "githubDark"/"githubLight" ép cố định, "auto" theo giao diện của app.
+    static func isDark(appIsDark: Bool) -> Bool {
+        switch SettingsStore.shared.settings.markdownTheme {
+        case "githubDark":  return true
+        case "githubLight": return false
+        default:            return appIsDark
+        }
+    }
+
     static func html(markdown: String, dark: Bool, anchor: String?) -> String {
         guard let template = resource("markdown-template", "html"),
               let glue = resource("catnip-markdown", "js"),
@@ -93,6 +102,7 @@ enum MarkdownPage {
         let libs = libraries.compactMap { resource($0, "js") }.joined(separator: "\n")
         let values: [String: String] = [
             "SCHEME": dark ? "dark" : "light",
+            "FONT_SIZE": String(Int(min(max(SettingsStore.shared.settings.markdownFontSize, 10), 32))),
             "NONCE": UUID().uuidString.replacingOccurrences(of: "-", with: ""),
             "BG": dark ? "#0d1117" : "#ffffff",
             "MARKDOWN_CSS": css,
@@ -220,7 +230,7 @@ final class MarkdownPreviewViewController: UIViewController, WKNavigationDelegat
     }
 
     private func render(anchor: String?) {
-        let dark = Appearance.theme.isDark
+        let dark = MarkdownPage.isDark(appIsDark: Appearance.theme.isDark)
         Appearance.style(navigationController)
         let bg = MarkdownPage.backgroundColor(dark: dark)
         view.backgroundColor = bg

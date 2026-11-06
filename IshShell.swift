@@ -68,7 +68,7 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         let t = Appearance.theme
         terminalView.nativeBackgroundColor = t.bgColor
         terminalView.nativeForegroundColor = t.fgColor
-        terminalView.font = Appearance.codeFont(max(Appearance.fontSize, 11))
+        terminalView.font = Appearance.codeFont(Appearance.terminalFontSize)
     }
 
     // MARK: Khởi động

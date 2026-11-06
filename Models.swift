@@ -110,7 +110,63 @@ struct Theme: Codable {
         ]
     )
 
-    static var builtIn: [Theme] { [.dark, .light, .monokai, .solarized] }
+    static let githubDark = Theme(
+        name: "Dark (GitHub)",
+        bg: "#0d1117", bg2: "#010409", bg3: "#161b22",
+        fg: "#e6edf3", muted: "#8b949e", accent: "#58a6ff",
+        border: "#30363d", hover: "#161b22",
+        tokens: [
+            .comment: "#8b949e", .keyword: "#ff7b72", .string: "#a5d6ff",
+            .number: "#79c0ff", .function: "#d2a8ff", .op: "#ff7b72",
+            .punct: "#e6edf3", .tag: "#7ee787", .attr: "#79c0ff",
+            .bool: "#79c0ff", .type: "#ffa657", .decorator: "#ffa657",
+            .heading: "#79c0ff", .doctype: "#8b949e", .color: "#79c0ff"
+        ]
+    )
+
+    static let githubDimmed = Theme(
+        name: "Dark Dimmed (GitHub)",
+        bg: "#22272e", bg2: "#1c2128", bg3: "#2d333b",
+        fg: "#adbac7", muted: "#768390", accent: "#539bf5",
+        border: "#444c56", hover: "#2d333b",
+        tokens: [
+            .comment: "#768390", .keyword: "#f47067", .string: "#96d0ff",
+            .number: "#6cb6ff", .function: "#dcbdfb", .op: "#f47067",
+            .punct: "#adbac7", .tag: "#8ddb8c", .attr: "#6cb6ff",
+            .bool: "#6cb6ff", .type: "#f69d50", .decorator: "#f69d50",
+            .heading: "#6cb6ff", .doctype: "#768390", .color: "#6cb6ff"
+        ]
+    )
+
+    static let dracula = Theme(
+        name: "Dracula",
+        bg: "#282a36", bg2: "#21222c", bg3: "#191a21",
+        fg: "#f8f8f2", muted: "#6272a4", accent: "#bd93f9",
+        border: "#44475a", hover: "#343746",
+        tokens: [
+            .comment: "#6272a4", .keyword: "#ff79c6", .string: "#f1fa8c",
+            .number: "#bd93f9", .function: "#50fa7b", .op: "#ff79c6",
+            .punct: "#f8f8f2", .tag: "#ff79c6", .attr: "#50fa7b",
+            .bool: "#bd93f9", .type: "#8be9fd", .decorator: "#ffb86c",
+            .heading: "#bd93f9", .doctype: "#6272a4", .color: "#bd93f9"
+        ]
+    )
+
+    static let nord = Theme(
+        name: "Nord",
+        bg: "#2e3440", bg2: "#272c36", bg3: "#242933",
+        fg: "#d8dee9", muted: "#616e88", accent: "#88c0d0",
+        border: "#3b4252", hover: "#3b4252",
+        tokens: [
+            .comment: "#616e88", .keyword: "#81a1c1", .string: "#a3be8c",
+            .number: "#b48ead", .function: "#88c0d0", .op: "#81a1c1",
+            .punct: "#d8dee9", .tag: "#81a1c1", .attr: "#8fbcbb",
+            .bool: "#81a1c1", .type: "#8fbcbb", .decorator: "#d08770",
+            .heading: "#88c0d0", .doctype: "#616e88", .color: "#b48ead"
+        ]
+    )
+
+    static var builtIn: [Theme] { [.dark, .githubDark, .githubDimmed, .light, .monokai, .solarized, .dracula, .nord] }
     static var all: [Theme] { builtIn + ThemeStore.shared.custom }
 
     var isCustom: Bool { key != nil }
@@ -118,6 +174,10 @@ struct Theme: Codable {
     /// Khoá ngắn dùng để lưu vào settings.json.
     var id: String {
         if let k = key { return k }
+        if name == "Dark (GitHub)" { return "githubdark" }
+        if name == "Dark Dimmed (GitHub)" { return "githubdimmed" }
+        if name == "Dracula" { return "dracula" }
+        if name == "Nord" { return "nord" }
         if name.contains("Light") { return "light" }
         if name.contains("Monokai") { return "monokai" }
         if name.contains("Solarized") { return "solarized" }
@@ -134,6 +194,10 @@ struct Theme: Codable {
     static func byName(_ n: String) -> Theme {
         if n.hasPrefix("custom:") { return ThemeStore.shared.theme(forKey: n) ?? .dark }
         switch n {
+        case "githubdark":   return .githubDark
+        case "githubdimmed": return .githubDimmed
+        case "dracula":      return .dracula
+        case "nord":         return .nord
         case "light":     return .light
         case "monokai":   return .monokai
         case "solarized": return .solarized
