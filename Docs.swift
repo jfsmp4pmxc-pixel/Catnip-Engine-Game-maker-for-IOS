@@ -28,16 +28,22 @@ enum DocsCatalog {
     struct Topic { let title: String; let file: String; let symbol: String }
 
     static let topics: [Topic] = [
-        Topic(title: "Bắt đầu với LÖVE",       file: "docs-01-bat-dau",       symbol: "flag.checkered"),
-        Topic(title: "Các hàm callback",       file: "docs-02-callback",      symbol: "arrow.triangle.2.circlepath"),
-        Topic(title: "Đồ hoạ",                 file: "docs-03-do-hoa",        symbol: "paintbrush"),
-        Topic(title: "Âm thanh",               file: "docs-04-am-thanh",      symbol: "speaker.wave.2"),
-        Topic(title: "Bàn phím, chuột, cảm ứng", file: "docs-05-nhap-lieu",   symbol: "hand.tap"),
-        Topic(title: "Vật lý (Box2D)",         file: "docs-06-vat-ly",        symbol: "circle.hexagongrid"),
-        Topic(title: "File và lưu dữ liệu",    file: "docs-07-file-luu-tru",  symbol: "externaldrive"),
-        Topic(title: "Cấu hình conf.lua",      file: "docs-08-conf",          symbol: "slider.horizontal.3"),
-        Topic(title: "Mẹo cho iOS và Catnip",  file: "docs-09-ios",           symbol: "iphone"),
-        Topic(title: "Lua cơ bản",             file: "docs-10-lua-co-ban",    symbol: "book")
+        Topic(title: "Bắt đầu với LÖVE",          file: "docs-01-bat-dau",          symbol: "flag.checkered"),
+        Topic(title: "Lua cơ bản",                file: "docs-02-lua-co-ban",       symbol: "book"),
+        Topic(title: "Các hàm callback",          file: "docs-03-callback",         symbol: "arrow.triangle.2.circlepath"),
+        Topic(title: "Đồ hoạ",                    file: "docs-04-do-hoa",           symbol: "paintbrush"),
+        Topic(title: "Hình ảnh, sprite, hoạt ảnh", file: "docs-05-hinh-anh",        symbol: "photo"),
+        Topic(title: "Âm thanh",                  file: "docs-06-am-thanh",         symbol: "speaker.wave.2"),
+        Topic(title: "Bàn phím, chuột, cảm ứng",  file: "docs-07-nhap-lieu",        symbol: "hand.tap"),
+        Topic(title: "Toán học và thời gian",     file: "docs-08-toan-thoi-gian",   symbol: "function"),
+        Topic(title: "Va chạm tự làm",            file: "docs-09-va-cham",          symbol: "square.on.square"),
+        Topic(title: "Vật lý (Box2D)",            file: "docs-10-vat-ly",           symbol: "circle.hexagongrid"),
+        Topic(title: "File và lưu dữ liệu",       file: "docs-11-file-luu-du-lieu", symbol: "externaldrive"),
+        Topic(title: "Shader",                    file: "docs-12-shader",           symbol: "sparkles"),
+        Topic(title: "Cấu hình conf.lua",         file: "docs-13-conf",             symbol: "slider.horizontal.3"),
+        Topic(title: "Game mẫu hoàn chỉnh",       file: "docs-14-game-mau",         symbol: "gamecontroller"),
+        Topic(title: "Dùng trên iOS và Catnip",   file: "docs-15-ios-catnip",       symbol: "iphone"),
+        Topic(title: "Gỡ lỗi và lỗi thường gặp", file: "docs-16-go-loi",           symbol: "ladybug")
     ]
 
     static let officialWiki = URL(string: "https://love2d.org/wiki/Main_Page")!
