@@ -16,7 +16,7 @@
 - Lua Runtime
 ![4](img/IMG_4175.png)
 ## công nghệ
-- Catnip được viết bằng Swift, Obj-C và **sử dụng** LÖVE framework để chạy các chương trình mà bạn viết.
+- Catnip được viết bằng Swift, Obj-C, Obj-C++,... và **sử dụng** LÖVE framework để chạy các chương trình mà bạn viết.
 - Phiên bản LÖVE là 12.0
 ## cài đặt
 - Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
