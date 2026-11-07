@@ -472,7 +472,28 @@ final class ShellViewController: UIViewController, UITextFieldDelegate {
     }
 }
 
+enum IshAvailability {
+    /// Bản build này có nhúng iSH (Linux thật) hay không.
+    static var isEmbedded: Bool {
+        #if CATNIP_HAS_ISH
+        return true
+        #else
+        return false
+        #endif
+    }
+}
+
 extension UIViewController {
+    /// Mở màn hình cài lại bộ công cụ Linux (chỉ có khi build nhúng iSH).
+    func presentIshSetup() {
+        #if CATNIP_HAS_ISH
+        let vc = IshSetupViewController()
+        vc.modalPresentationStyle = .fullScreen
+        vc.onFinish = { [weak vc] in vc?.dismiss(animated: true) }
+        present(vc, animated: true)
+        #endif
+    }
+
     /// Mở cửa sổ shell: iSH (Linux thật) nếu bản build có nhúng, không thì shell dựng sẵn ở trên.
     func presentShell() {
         #if CATNIP_HAS_ISH

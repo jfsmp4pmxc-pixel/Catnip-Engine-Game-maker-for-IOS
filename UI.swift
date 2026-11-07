@@ -392,7 +392,7 @@ final class SettingsViewController: UITableViewController {
         case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
-        case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Thư mục gốc của shell là Documents, nơi lưu các dự án."
+        case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
         default:      return nil
         }
     }
@@ -413,7 +413,7 @@ final class SettingsViewController: UITableViewController {
         case .editing: return 4
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return 2                         // bật shell + cỡ chữ shell
+        case .tools:   return IshAvailability.isEmbedded ? 3 : 2   // bật shell + cỡ chữ shell (+ cài lại bộ công cụ)
         }
     }
 
@@ -557,12 +557,17 @@ final class SettingsViewController: UITableViewController {
                     SettingsStore.shared.update { $0.shellEnabled = on }
                     self?.settingsChanged()
                 }
-            } else {
+            } else if indexPath.row == 1 {
                 stepperCell(cell, text: "Cỡ chữ shell", value: st.terminalFontSize, range: Appearance.terminalFontRange,
                             format: { "\(Int($0)) pt" }) { [weak self] v in
                     SettingsStore.shared.update { $0.terminalFontSize = v }
                     self?.settingsChanged()
                 }
+            } else {
+                cell.textLabel?.text = "Cài lại bộ công cụ Linux…"
+                cell.textLabel?.textColor = t.accentColor
+                cell.imageView?.image = UIImage(systemName: "arrow.down.circle")
+                cell.imageView?.tintColor = t.accentColor
             }
         }
         return cell
@@ -596,6 +601,8 @@ final class SettingsViewController: UITableViewController {
             } else {
                 presentImporter(.font)
             }
+        case .tools where indexPath.row == 2:
+            presentIshSetup()
         case .markdown where indexPath.row >= 1:
             let keys = ["auto", "githubLight", "githubDark"]
             SettingsStore.shared.update { $0.markdownTheme = keys[indexPath.row - 1] }

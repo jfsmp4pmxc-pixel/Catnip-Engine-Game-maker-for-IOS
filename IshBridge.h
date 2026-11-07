@@ -41,19 +41,31 @@ typedef void (^IshProgressBlock)(double fraction, NSString *message);
                                        toPath:(NSString *)root
                                      progress:(nullable IshProgressBlock)progress;
 
-/// Khởi động kernel (một lần). `documents` được gắn vào /documents trong Linux.
-/// `repositories` (nếu có) ghi vào /etc/apk/repositories. Gọi trên main thread.
-/// Trả về 0 nếu thành công, ngược lại là errno âm của iSH.
+/// Khai báo các dự án cần gắn vào Linux: khoá là tên thư mục trong Linux (dưới /root),
+/// giá trị là đường dẫn thật trên iOS. Được áp dụng khi boot và mỗi lần mở phiên mới
+/// (gắn thêm dự án mới, gỡ dự án đã mất hoặc đổi chỗ).
++ (void)setProjectMounts:(NSDictionary<NSString *, NSString *> *)mounts NS_SWIFT_NAME(setProjectMounts(_:));
+
+/// Khởi động kernel (một lần). `repositories` (nếu có) ghi vào /etc/apk/repositories.
+/// Gọi trên main thread. Trả về 0 nếu thành công, ngược lại là errno âm của iSH.
 + (int)bootWithRoot:(NSString *)root
-          documents:(nullable NSString *)documents
-       repositories:(nullable NSString *)repositories;
+       repositories:(nullable NSString *)repositories NS_SWIFT_NAME(boot(withRoot:repositories:));
 
 @property (class, readonly) BOOL isBooted;
 
-/// Mở một phiên shell mới (/bin/login -f root trên pty). Gọi trên main thread.
-/// `output` được gọi trên main thread với dữ liệu terminal; `exit` khi phiên kết thúc.
+/// Mở một phiên mới trên pty. Gọi trên main thread.
+/// - `directory`: thư mục (đường dẫn trong Linux) mà shell tự `cd` vào; nil = thư mục nhà (/root).
+/// - `command`: nil = shell đăng nhập (/bin/login -f root); ngược lại chạy lệnh đó (argv[0] là chương trình).
+/// `output` được gọi trên main thread với dữ liệu terminal; `exit` khi phiên kết thúc
+/// (mã 0 = thành công).
 /// Trả về 0 nếu thành công, ngược lại là errno âm.
-+ (int)startSessionWithOutput:(IshOutputBlock)output exit:(IshExitBlock)exit;
++ (int)startSessionInDirectory:(nullable NSString *)directory
+                       command:(nullable NSArray<NSString *> *)command
+                        output:(IshOutputBlock)output
+                          exit:(IshExitBlock)exit NS_SWIFT_NAME(startSession(directory:command:output:exit:));
+
+/// Buộc phiên hiện tại kết thúc (SIGKILL). `exit` của phiên đó sẽ được gọi sau đó.
++ (void)killSession NS_SWIFT_NAME(killSession());
 
 + (void)sendInput:(NSData *)data;
 + (void)resizeToColumns:(int)columns rows:(int)rows;

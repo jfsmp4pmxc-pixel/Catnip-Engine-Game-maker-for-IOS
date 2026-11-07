@@ -86,6 +86,10 @@ final class EditorViewController: UIViewController {
     // MARK: Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        #if CATNIP_HAS_ISH
+        // iSH chạy ngầm và shell tự vào thư mục của dự án này.
+        IshRuntime.shared.openProject(project)
+        #endif
         navigationItem.largeTitleDisplayMode = .never
         navigationItem.leftItemsSupplementBackButton = true
         navigationItem.titleView = titleLabel

@@ -70,14 +70,30 @@ Xem chương **Nhập liệu** để có ví dụ cần ảo, vuốt, nút bấm
 
 Chi tiết xem chương **File và lưu dữ liệu**.
 
-## Shell (cửa sổ dòng lệnh)
+## Shell và workspace Linux (iSH)
 
-Bật trong **Cài đặt → Cửa sổ shell**: trên thanh công cụ xuất hiện nút terminal.
+Nếu bản dựng của bạn có **iSH**, Catnip chạy một môi trường Linux (Alpine) thật ngay trong app. Mỗi dự án là một **workspace**:
 
-- Nếu bản dựng của bạn có **iSH**, đó là một môi trường Linux (Alpine) thật chạy trong app. Thư mục dự án (Documents) được gắn vào `/documents`. Bạn có thể dùng `apk add` để cài thêm công cụ (git, python, lua...), nếu có kết nối mạng.
-- Nếu không, Catnip dùng **shell tích hợp** với một số lệnh cơ bản.
+- Mọi dự án được gắn vào thư mục nhà của root: dự án `Game Của Tôi` hiện ra ở `/root/Game_Của_Tôi` (khoảng trắng trong tên được đổi thành `_`; nếu trùng tên thì thêm `_2`, `_3`…). Sửa file bằng editor hay bằng công cụ Linux đều là cùng một file.
+- Khi bạn **mở một dự án**, iSH chạy ngầm và shell tự `cd` vào thư mục của dự án đó. Mở dự án khác thì shell được mở lại ở thư mục mới.
+- Dự án tạo sau khi shell đã chạy sẽ xuất hiện trong `/root` ở lần shell được mở lại (ví dụ khi bạn mở dự án đó).
+- Hệ thống file Linux nằm trong thư mục `iSH` của Catnip (xem được trong ứng dụng Tệp). Đừng sửa trực tiếp trong đó.
 
-Lần đầu mở iSH cần giải nén hệ thống tệp nên có thể mất ít phút.
+**Lần chạy đầu** Catnip cài sẵn `bash`, `vim`, `python3`, `g++` và `nasm` (cần mạng, mất vài phút) và hiện thanh tiến trình. Bạn có thể bấm **Bỏ qua** và cài sau bằng `apk add ...`. Muốn chạy lại bước này: Cài đặt → Công cụ → *Cài lại bộ công cụ Linux*.
+
+Một vài lệnh hay dùng:
+
+```sh
+ls                       # liệt kê file của dự án
+vim main.lua             # sửa file
+python3 script.py        # chạy Python
+g++ a.cpp -o a && ./a    # biên dịch và chạy C++
+nasm -f elf32 a.asm      # hợp ngữ x86 (iSH là x86 32 bit)
+apk add git lua5.1       # cài thêm gói
+bash                     # chuyển sang bash (shell mặc định là ash)
+```
+
+Bật nút shell trong **Cài đặt → Công cụ → Cửa sổ shell**. Nếu bản dựng không có iSH, Catnip dùng **shell tích hợp** với một số lệnh cơ bản.
 
 ## Phân phối game của bạn
 

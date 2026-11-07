@@ -31,6 +31,7 @@
 #include "kernel/task.h"
 #include "fs/devices.h"
 #include "fs/path.h"
+#include "kernel/signal.h"
 #include "fs/real.h"
 #include "fs/sock.h"
 #include "fs/tty.h"
@@ -185,9 +186,66 @@ static void configure_dns(void) {
     write_guest_file("/etc/resolv.conf", conf.UTF8String, strlen(conf.UTF8String));
 }
 
+// MARK: - Gắn các dự án vào /root
+
+static NSDictionary<NSString *, NSString *> *gWantedMounts;      // tên trong Linux -> đường dẫn iOS
+static NSMutableDictionary<NSString *, NSString *> *gMounted;    // đã gắn thật
+
+// Gọi khi `current` là một tiến trình hợp lệ (lúc boot hoặc ngay sau become_new_init_child).
+static void sync_project_mounts(void) {
+    NSDictionary *wanted = gWantedMounts;
+    if (wanted == nil)
+        return;
+    if (gMounted == nil)
+        gMounted = [NSMutableDictionary new];
+
+    // Gỡ những dự án không còn hoặc đã đổi đường dẫn.
+    for (NSString *name in gMounted.allKeys) {
+        if ([wanted[name] isEqualToString:gMounted[name]])
+            continue;
+        NSString *point = [@"/root/" stringByAppendingString:name];
+        lock(&mounts_lock);
+        int err = do_umount(point.UTF8String);
+        unlock(&mounts_lock);
+        if (err >= 0)
+            [gMounted removeObjectForKey:name];
+    }
+    // Gắn dự án mới.
+    for (NSString *name in wanted) {
+        if (gMounted[name] != nil)
+            continue;
+        NSString *host = wanted[name];
+        NSString *point = [@"/root/" stringByAppendingString:name];
+        generic_mkdirat(AT_PWD, point.UTF8String, 0755);   // đã có thì lỗi EEXIST, bỏ qua
+        lock(&mounts_lock);
+        int err = do_mount(&realfs, host.fileSystemRepresentation, point.UTF8String, "", 0);
+        unlock(&mounts_lock);
+        if (err >= 0)
+            gMounted[name] = host;
+        else
+            NSLog(@"iSH: không gắn được %@ (%d)", name, err);
+    }
+}
+
+// Gói argv/envp dạng "a\0b\0c\0\0" mà do_execve cần.
+static NSData *pack_strings(NSArray<NSString *> *items) {
+    NSMutableData *data = [NSMutableData new];
+    for (NSString *s in items) {
+        const char *c = s.UTF8String;
+        [data appendBytes:c length:strlen(c) + 1];
+    }
+    uint8_t zero = 0;
+    [data appendBytes:&zero length:1];
+    return data;
+}
+
 // MARK: - IshBridge
 
 @implementation IshBridge
+
++ (void)setProjectMounts:(NSDictionary<NSString *, NSString *> *)mounts {
+    gWantedMounts = [mounts copy];
+}
 
 + (BOOL)isRootInstalledAtPath:(NSString *)root {
     NSFileManager *fm = NSFileManager.defaultManager;
@@ -230,7 +288,7 @@ static void import_progress(void *cookie, double progress, const char *message, 
 
 + (BOOL)isBooted { return gBooted; }
 
-+ (int)bootWithRoot:(NSString *)root documents:(NSString *)documents repositories:(NSString *)repositories {
++ (int)bootWithRoot:(NSString *)root repositories:(NSString *)repositories {
     if (gBooted)
         return 0;
 
@@ -248,13 +306,21 @@ static void import_progress(void *cookie, double progress, const char *message, 
     do_mount(&procfs, "proc", "/proc", "", 0);
     do_mount(&devptsfs, "devpts", "/dev/pts", "", 0);
 
-    // Gắn thư mục Documents của Catnip (các dự án) vào /documents để dùng được bằng công cụ Linux.
-    if (documents.length > 0) {
-        generic_mkdirat(AT_PWD, "/documents", 0755);
-        do_mount(&realfs, documents.fileSystemRepresentation, "/documents", "", 0);
-    }
-
     configure_dns();
+
+    // Mỗi dự án của Catnip được gắn thành một thư mục dưới /root (nhà của root).
+    sync_project_mounts();
+
+    // Shell đăng nhập tự vào thư mục dự án: Catnip ghi đường dẫn vào /tmp/.catnip-cwd trước mỗi phiên.
+    generic_mkdirat(AT_PWD, "/etc/profile.d", 0755);
+    static const char profile[] =
+        "# Do Catnip tạo: vào thư mục dự án khi mở shell.\n"
+        "if [ -s /tmp/.catnip-cwd ]; then\n"
+        "  _catnip_dir=$(cat /tmp/.catnip-cwd)\n"
+        "  [ -d \"$_catnip_dir\" ] && cd \"$_catnip_dir\"\n"
+        "  unset _catnip_dir\n"
+        "fi\n";
+    write_guest_file("/etc/profile.d/catnip.sh", profile, strlen(profile));
     if (repositories.length > 0) {
         NSString *header = @"# Do Catnip quản lý (cùng kho với iSH). Sửa file này sẽ bị ghi đè mỗi lần mở shell.\n";
         NSString *text = [header stringByAppendingString:repositories];
@@ -287,12 +353,18 @@ static void import_progress(void *cookie, double progress, const char *message, 
     return 0;
 }
 
-+ (int)startSessionWithOutput:(IshOutputBlock)output exit:(IshExitBlock)exitBlock {
++ (int)startSessionInDirectory:(NSString *)directory
+                       command:(NSArray<NSString *> *)command
+                        output:(IshOutputBlock)output
+                          exit:(IshExitBlock)exitBlock {
     if (!gBooted)
         return -1;
     int err = become_new_init_child();
     if (err < 0)
         return err;
+
+    // Gắn thêm dự án mới tạo (nếu có) trước khi vào shell.
+    sync_project_mounts();
 
     struct tty *tty = pty_open_fake(&catnip_pty_driver);
     if (IS_ERR(tty))
@@ -310,15 +382,31 @@ static void import_progress(void *cookie, double progress, const char *message, 
         return err;
     tty_release(tty);
 
-    const char argv[] = "/bin/login\0-f\0root\0";
-    const char envp[] = "TERM=xterm-256color\0";
-    err = do_execve("/bin/login", 3, argv, envp);
+    NSArray<NSString *> *argvItems = command.count > 0 ? command : @[@"/bin/login", @"-f", @"root"];
+    if (command.count == 0) {
+        // Shell đăng nhập đọc /etc/profile.d/catnip.sh để cd vào thư mục dự án.
+        const char *cwd = directory.length > 0 ? directory.UTF8String : "";
+        write_guest_file("/tmp/.catnip-cwd", cwd, strlen(cwd));
+    }
+    NSData *argv = pack_strings(argvItems);
+    NSData *envp = pack_strings(@[@"TERM=xterm-256color", @"HOME=/root",
+                                  @"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"]);
+    err = do_execve(argvItems[0].UTF8String, (int) argvItems.count, (const char *) argv.bytes, (const char *) envp.bytes);
     if (err < 0)
         return err;
     session->pid = current->pid;
     gSession = session;
     task_start(current);
     return 0;
+}
+
++ (void)killSession {
+    IshSession *session = gSession;
+    if (session == nil)
+        return;
+    struct task *task = pid_get_task(session->pid);
+    if (task != NULL)
+        send_signal(task, SIGKILL_, SIGINFO_NIL);
 }
 
 + (void)sendInput:(NSData *)data {

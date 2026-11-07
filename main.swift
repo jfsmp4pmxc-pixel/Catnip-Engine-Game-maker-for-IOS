@@ -84,21 +84,44 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
 
         CatnipPaths.prepare()
+
+        let w = UIWindow(frame: UIScreen.main.bounds)
+        window = w
+
+        #if CATNIP_HAS_ISH
+        // Lần chạy đầu: cài môi trường Linux (có thể bỏ qua) rồi mới vào màn hình chính.
+        if !SettingsStore.shared.settings.ishSetupDone {
+            let setup = IshSetupViewController()
+            setup.onFinish = { [weak self] in self?.showMain(animated: true) }
+            w.rootViewController = setup
+            w.makeKeyAndVisible()
+            return true
+        }
+        #endif
+        showMain(animated: false)
+        return true
+    }
+
+    /// Dựng màn hình chính (danh sách dự án) và mở lại dự án đang làm dở lần trước (nếu còn).
+    private func showMain(animated: Bool) {
+        guard let w = window else { return }
         let projects = ProjectListViewController()
         let nav = CatnipNavigationController(rootViewController: projects)
         nav.navigationBar.prefersLargeTitles = true
 
-        let w = UIWindow(frame: UIScreen.main.bounds)
-        w.rootViewController = nav
-        w.makeKeyAndVisible()
-        window = w
-
-        // Mở lại dự án đang làm dở lần trước (nếu còn).
         let s = SettingsStore.shared.settings
         if let name = s.lastProject, ProjectStore.shared.listProjects().contains(name) {
             nav.pushViewController(EditorViewController(project: name), animated: false)
         }
-        return true
+
+        if animated {
+            UIView.transition(with: w, duration: 0.35, options: .transitionCrossDissolve) {
+                w.rootViewController = nav
+            }
+        } else {
+            w.rootViewController = nav
+        }
+        w.makeKeyAndVisible()
     }
 
     func application(_ application: UIApplication,

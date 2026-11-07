@@ -108,6 +108,7 @@ struct AppSettings: Codable {
     var markdownTheme: String = "auto"  // "auto" (theo giao diện app), "githubLight", "githubDark"
     var tabWidth: Int = 2               // số dấu cách của một mức thụt lề
     var useTabs: Bool = false           // true = thụt lề bằng ký tự Tab
+    var ishSetupDone: Bool = false      // đã qua màn hình cài môi trường Linux lần đầu (cài xong hoặc bỏ qua)
 
     init() {}
 
@@ -129,6 +130,7 @@ struct AppSettings: Codable {
         markdownTheme   = try c.decodeIfPresent(String.self, forKey: .markdownTheme) ?? "auto"
         tabWidth        = min(max(try c.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 2, 1), 8)
         useTabs         = try c.decodeIfPresent(Bool.self, forKey: .useTabs) ?? false
+        ishSetupDone    = try c.decodeIfPresent(Bool.self, forKey: .ishSetupDone) ?? false
     }
 }
 
