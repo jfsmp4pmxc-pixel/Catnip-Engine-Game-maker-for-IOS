@@ -94,6 +94,8 @@
 - [x] LÖVE
 - [ ] kết nối Github
 - [ ] build
+
+- Nhật ký thay đổi đầy đủ: [CHANGELOG](CHANGELOG.md)
 ## giấy phép
 > [!WARNING]
 > Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
