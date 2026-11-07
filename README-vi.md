@@ -94,7 +94,6 @@
 - [x] LÖVE
 - [ ] kết nối Github
 - [ ] build
-
 - Nhật ký thay đổi đầy đủ: [CHANGELOG](CHANGELOG.md)
 ## giấy phép
 > [!WARNING]
