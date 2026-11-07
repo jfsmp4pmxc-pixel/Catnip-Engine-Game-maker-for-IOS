@@ -1,7 +1,7 @@
 # Catnip Engine: game maker for IOS
 ## Catnip Engine
 - Catnip Engine: game maker for IOS
-# Language
+## Language
 - [Tiếng Việt](README-vi.md)
 ## Introduction
 - Welcome to Catnip Engine! This is a game engine powered by a Love2D core. Designed specifically for IPhone.
