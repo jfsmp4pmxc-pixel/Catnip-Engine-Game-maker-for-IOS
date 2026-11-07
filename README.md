@@ -1,48 +1,59 @@
-# Catnip Engine: game maker for IOS
-## Catnip Engine
-- Catnip Engine: game maker for IOS
-## giới thiệu
-- Chào mừng bạn đến với Catnip Engine!, đây là một game engine chạy bằng lõi là Love2D. Được thiết kế riêng cho IPhone.
-- Công cụ này giúp nhà phát triển lập trình ngay trên thiết bị di động (IPhone).
-- Catnip mang đến cho bạn một môi trường lập trình gần như đầy đủ ngay trên IPhone của bạn với: trình soạn thảo mã, quản lý dự án, tuỳ chỉnh,...
-### ảnh chụp màn hình 
-- giao diện chính
-![1](img/IMG_4172.png)
+Catnip Engine: game maker for IOS
 
-- trình soạn thảo mã nguồn
-![2](img/IMG_4173.png)
-![3](img/IMG_4174.png)
+Catnip Engine
 
-- Lua Runtime
-![4](img/IMG_4175.png)
-## công nghệ
-- Catnip được viết bằng Swift, Obj-C, Obj-C++,... và **sử dụng** LÖVE framework để chạy các chương trình mà bạn viết.
-- Phiên bản LÖVE là 12.0
-## cài đặt
-- Bạn cần tải tệp .ipa ở mục *"release"* của repo này sau đó cài qua các công cụ cài đặt bên thứ ba như: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
-> [!WARNING]
-> Catnip Original **chỉ phân phối chính thức ở repo này**. Tải từ nguồn khác có thể có rủi ro.
+· Catnip Engine: game maker for IOS
 
-> [!TIP]
-> - Catnip yêu cầu IOS 15 trở lên 
-> - Catnip hỗ trợ rất tốt IOS 15
+Introduction
 
-| IOS    | Ksign | Esign | Trollstore | 
-|--------|:-------:|:-------:|:------------:|
-|15.0    |  ❌   |  ✅   |    ✅ (khuyến nghị)|
-|15.x    |  ❌   |  ✅   |    ✅ (khuyến nghị)|
-|16.0    |  ✅   |  ✅   |    ✅ (khuyến nghị)|
-|16.6.1  |  ✅   |  ✅   |    ✅ (khuyến nghị)|
-|16.7.11 |  ✅ (khuyến nghị)|  ✅   |    ❌      |
-|17.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
-|18.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
-|26.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
-|27.x    |  ✅ (khuyến nghị)|  ✅   |    ❌      |
+· Welcome to Catnip Engine! This is a game engine powered by a Love2D core. Designed specifically for IPhone.
+· This tool lets developers program directly on a mobile device (IPhone).
+· Catnip provides you with an almost complete programming environment right on your IPhone with: code editor, project management, customization,...
 
-> [!WARNING] 
-> - Việc **cài đặt qua Trollstore** cũng có **rủi ro**. Miễn là bạn tải từ mục **"release"** (vì bản phát hành tốt hơn bản beta) và bạn cài đặt những ứng dụng từ nguồn đáng tin (vd: decrypt.day, armcovertor, ...) thì không vấn đề gì.
+Screenshots
 
-## cấu trúc mã nguồn 
+· main interface
+img/IMG_4172.png
+· source code editor
+img/IMG_4173.png
+img/IMG_4174.png
+· Lua Runtime
+img/IMG_4175.png
+
+Technologies
+
+· Catnip is written in Swift, Obj-C, Obj-C++,... and uses the LÖVE framework to run the programs you write.
+· The LÖVE version is 12.0
+
+Installation
+
+· You need to download the .ipa file from the "release" section of this repo and then install it via third-party installation tools such as: Ksign (IOS 16+), Trollstore (IOS 14.0 -> 16.6.1), Sidestore,...
+
+[!WARNING]
+Catnip Original is officially distributed only in this repo. Downloading from other sources may carry risks.
+
+[!TIP]
+
+· Catnip requires IOS 15 or later
+· Catnip supports IOS 15 very well
+
+IOS Ksign Esign Trollstore
+15.0 ❌ ✅ ✅ (recommended)
+15.x ❌ ✅ ✅ (recommended)
+16.0 ✅ ✅ ✅ (recommended)
+16.6.1 ✅ ✅ ✅ (recommended)
+16.7.11 ✅ (recommended) ✅ ❌
+17.x ✅ (recommended) ✅ ❌
+18.x ✅ (recommended) ✅ ❌
+26.x ✅ (recommended) ✅ ❌
+27.x ✅ (recommended) ✅ ❌
+
+[!WARNING]
+
+· Installing via Trollstore also carries risks. As long as you download from the "release" section (since releases are better than beta) and you install apps from trusted sources (e.g., decrypt.day, armcovertor, ...), there is no problem.
+
+Source code structure
+
 ```txt
 /
  |___ README.md
@@ -89,29 +100,37 @@
              |___ workflows/
                            |___ main.yml
 ```
-## tiến trình 
-- [x] trình soạn thảo mã
-- [x] LÖVE
-- [ ] kết nối Github
-- [ ] build
-## giấy phép
-> [!WARNING]
-> Dự án này được phân phối theo **GNU General Public License v3.0** (GPL-3.0-or-later).
-> 
-> Bạn được tự do:
-> - Sử dụng cho mọi mục đích, kể cả thương mại
-> - Sửa đổi mã nguồn
-> - Fork và phân phối lại
->
-> Với điều kiện:
-> - **Ghi công tác giả gốc** — giữ nguyên thông báo bản quyền
-> - **Công khai mã nguồn** — mọi sản phẩm phái sinh phải dùng cùng giấy phép GPLv3
-> - Ghi rõ các thay đổi đã thực hiện so với bản gốc
 
-Xem file [LICENSE](LICENSE) để biết chi tiết đầy đủ.
+Progress
 
-Copyright (C) 2026 **jfsmp4pmxc-pixel** <ihhjnkk@gmail.com>
-## tác giả 
+· code editor
+· LÖVE
+· GitHub connection
+· build
+
+License
+
+[!WARNING]
+This project is distributed under the GNU General Public License v3.0 (GPL-3.0-or-later).
+
+You are free to:
+
+· Use for any purpose, including commercial
+· Modify the source code
+· Fork and redistribute
+
+Under the conditions:
+
+· Credit the original author — keep the copyright notice
+· Make the source code public — every derivative product must use the same GPLv3 license
+· Clearly state the changes made compared to the original
+
+See the LICENSE file for full details.
+
+Copyright (C) 2026 jfsmp4pmxc-pixel ihhjnkk@gmail.com
+
+Author
+
 ```txt
 - youtube: @B40Ph4m        |admin
   github : jfsmp4pmxc-pixel
@@ -120,7 +139,3 @@ Copyright (C) 2026 **jfsmp4pmxc-pixel** <ihhjnkk@gmail.com>
 - youtube: @h3ll0-70       |admin
   github : ilovegcc-g00
 ```
-
-
-
-
