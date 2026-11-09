@@ -41,7 +41,7 @@
 |26.x    |  ✅ (recommended)|  ✅   |    ❌      |
 |27.x    |  ✅ (recommended)|  ✅   |    ❌      |
 
-> [!COUTION] 
+> [!WARNING] 
 > - **Installing via Trollstore** also carries **risks**. As long as you download from the **"release"** section (since releases are better than beta) and you install apps from trusted sources (e.g., decrypt.day, armcovertor, ...), there is no problem.
 
 ## Source code structure 
