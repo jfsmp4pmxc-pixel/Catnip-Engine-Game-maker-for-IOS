@@ -8,6 +8,12 @@ Dự án của bạn nằm trong thư mục **Documents** của Catnip. Vì vậ
 - Bạn có thể kéo thả file (ảnh, âm thanh, font) vào thư mục dự án ngay từ Tệp.
 - Trong Catnip, dùng nút **nhập** ở thanh bên để đưa file từ Tệp, iCloud, Ảnh... vào dự án.
 
+**Sửa file bằng ứng dụng Tệp (hoặc shell):** Catnip tự phát hiện thay đổi. Cây file được làm mới, file đang mở được nạp lại nếu bạn chưa sửa gì. Nếu cả hai bên cùng sửa một file, Catnip hỏi bạn giữ bản nào thay vì ghi đè. File bị xoá hay đổi tên bên ngoài cũng được báo rõ ràng.
+
+**Nút Build (🔨):** hiện tại xuất cả dự án thành file `.zip` để lưu vào Tệp, gửi qua AirDrop... Kết nối GitHub sẽ có sau.
+
+**Soát chính tả Markdown:** trong file `.md`, các tiếng hoặc cụm từ tiếng Việt sai chính tả được tô đỏ (bỏ qua code, link và từ tiếng Anh). Dòng trạng thái ở dưới cho biết số lỗi và gợi ý sửa khi con trỏ đang ở trên từ sai. Tắt trong Cài đặt → Soạn thảo.
+
 Thư mục `Inbox` và `iSH` là tên **dành riêng** của hệ thống, đừng đặt tên dự án trùng.
 
 ## Chạy game
@@ -75,7 +81,7 @@ Chi tiết xem chương **File và lưu dữ liệu**.
 Nếu bản dựng của bạn có **iSH**, Catnip chạy một môi trường Linux (Alpine) thật ngay trong app. Mỗi dự án là một **workspace**:
 
 - Mọi dự án được gắn vào thư mục nhà của root: dự án `Game Của Tôi` hiện ra ở `/root/Game_Của_Tôi` (khoảng trắng trong tên được đổi thành `_`; nếu trùng tên thì thêm `_2`, `_3`…). Sửa file bằng editor hay bằng công cụ Linux đều là cùng một file.
-- Khi bạn **mở một dự án**, iSH chạy ngầm và shell tự `cd` vào thư mục của dự án đó. Mở dự án khác thì shell được mở lại ở thư mục mới.
+- Khi bạn **mở một dự án**, iSH chạy ngầm và shell tự `cd` vào thư mục của dự án đó. Mở dự án khác thì shell được mở lại ở thư mục mới; thoát về danh sách dự án thì shell mở lại ở `/root`.
 - Dự án tạo sau khi shell đã chạy sẽ xuất hiện trong `/root` ở lần shell được mở lại (ví dụ khi bạn mở dự án đó).
 - Hệ thống file Linux nằm trong thư mục `iSH` của Catnip (xem được trong ứng dụng Tệp). Đừng sửa trực tiếp trong đó.
 

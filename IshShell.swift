@@ -275,6 +275,15 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         }
     }
 
+    /// Báo đã thoát khỏi dự án (về danh sách dự án): shell quay về /root.
+    func leaveProject() {
+        desiredProject = nil
+        if case .running = state, sessionProject != nil {
+            switchingProject = true
+            IshBridge.killSession()        // phiên mở lại ở /root
+        }
+    }
+
     func ensureRunning() {
         switch state {
         case .idle, .failed: break

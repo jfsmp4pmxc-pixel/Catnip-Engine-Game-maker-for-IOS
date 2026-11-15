@@ -108,6 +108,7 @@ struct AppSettings: Codable {
     var markdownTheme: String = "auto"  // "auto" (theo giao diện app), "githubLight", "githubDark"
     var tabWidth: Int = 2               // số dấu cách của một mức thụt lề
     var useTabs: Bool = false           // true = thụt lề bằng ký tự Tab
+    var spellCheckMarkdown: Bool = true // soát lỗi chính tả tiếng Việt trong file Markdown (tô đỏ)
     var ishSetupDone: Bool = false      // đã qua màn hình cài môi trường Linux lần đầu (cài xong hoặc bỏ qua)
 
     init() {}
@@ -130,6 +131,7 @@ struct AppSettings: Codable {
         markdownTheme   = try c.decodeIfPresent(String.self, forKey: .markdownTheme) ?? "auto"
         tabWidth        = min(max(try c.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 2, 1), 8)
         useTabs         = try c.decodeIfPresent(Bool.self, forKey: .useTabs) ?? false
+        spellCheckMarkdown = try c.decodeIfPresent(Bool.self, forKey: .spellCheckMarkdown) ?? true
         ishSetupDone    = try c.decodeIfPresent(Bool.self, forKey: .ishSetupDone) ?? false
     }
 }
@@ -182,13 +184,15 @@ struct FileEntry {
 // MARK: - Project kind
 
 enum ProjectKind: String, Codable, CaseIterable {
-    case love, scratch, python
+    case love, scratch, python, twoObj, catnip
 
     var displayName: String {
         switch self {
         case .love:    return "LÖVE"
         case .scratch: return "Scratch"
         case .python:  return "Python"
+        case .twoObj:  return "2o obj"
+        case .catnip:  return "Catnip Engine"
         }
     }
 
@@ -196,7 +200,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         switch self {
         case .love:    return "Game 2D dùng LÖVE (Lua), chạy được ngay"
         case .scratch: return "Dự án bình thường, tự do tạo file"
-        case .python:  return "Sắp ra mắt"
+        case .python, .twoObj, .catnip: return "Sắp ra mắt"
         }
     }
 
@@ -205,11 +209,13 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .love:    return "gamecontroller.fill"
         case .scratch: return "doc.text"
         case .python:  return "chevron.left.forwardslash.chevron.right"
+        case .twoObj:  return "cube"
+        case .catnip:  return "pawprint.fill"
         }
     }
 
-    /// Python chưa hỗ trợ (coming soon).
-    var isAvailable: Bool { self != .python }
+    /// Chỉ LÖVE và dự án thường dùng được; các loại còn lại là "coming soon".
+    var isAvailable: Bool { self == .love || self == .scratch }
     /// Chỉ dự án LÖVE mới có nút Chạy.
     var canRun: Bool { self == .love }
 }
@@ -274,7 +280,7 @@ final class ProjectStore {
                 try writeTemplate(into: url, title: n)
             case .scratch:
                 try "# \(n)\n".write(to: url.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
-            case .python:
+            case .python, .twoObj, .catnip:
                 break
             }
         } catch {
@@ -445,7 +451,50 @@ final class ProjectStore {
 
     func read(project: String, path: String) -> String? {
         guard let url = try? fileURL(project, path) else { return nil }
-        return try? String(contentsOf: url, encoding: .utf8)
+        if let text = try? String(contentsOf: url, encoding: .utf8) { return text }
+        // File do công cụ khác ghi (ứng dụng Tệp, shell) có thể không phải UTF-8: thử tự nhận dạng bảng mã.
+        var used = String.Encoding.utf8
+        return try? String(contentsOf: url, usedEncoding: &used)
+    }
+
+    // MARK: Phát hiện thay đổi từ bên ngoài (ứng dụng Tệp, shell iSH…)
+
+    func projectExists(_ project: String) -> Bool {
+        var isDir: ObjCBool = false
+        return fm.fileExists(atPath: projectURL(project).path, isDirectory: &isDir) && isDir.boolValue
+    }
+
+    func fileExists(project: String, path: String) -> Bool {
+        guard let url = try? fileURL(project, path) else { return false }
+        var isDir: ObjCBool = false
+        return fm.fileExists(atPath: url.path, isDirectory: &isDir) && !isDir.boolValue
+    }
+
+    func modificationDate(project: String, path: String) -> Date? {
+        guard let url = try? fileURL(project, path) else { return nil }
+        return (try? fm.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
+    }
+
+    /// Chữ ký nhanh của cả dự án (đường dẫn + kích thước + ngày sửa của mọi mục, kể cả thư mục).
+    /// Khác nhau giữa hai lần gọi nghĩa là có gì đó đã đổi.
+    func signature(project: String) -> Int {
+        let base = projectURL(project)
+        guard let en = fm.enumerator(at: base,
+                                     includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey],
+                                     options: [.skipsHiddenFiles]) else { return 0 }
+        var hasher = Hasher()
+        var count = 0
+        for case let url as URL in en {
+            count += 1
+            if count > 10_000 { break }
+            hasher.combine(url.path)
+            let v = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey])
+            hasher.combine(v?.fileSize ?? -1)
+            hasher.combine(v?.contentModificationDate?.timeIntervalSince1970 ?? 0)
+            hasher.combine(v?.isDirectory ?? false)
+        }
+        hasher.combine(count)
+        return hasher.finalize()
     }
 
     func write(project: String, path: String, content: String) throws {

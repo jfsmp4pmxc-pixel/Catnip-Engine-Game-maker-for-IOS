@@ -39,6 +39,15 @@ final class EditorViewController: UIViewController {
     var language: Language = .plaintext
     var expanded = Set<String>()
     var entries: [FileEntry] = []
+    var spellIssues: [VietnameseSpell.Issue] = []
+
+    // Đồng bộ với thay đổi từ bên ngoài (ứng dụng Tệp, shell…)
+    var baselineText: String?          // nội dung file đang mở ở lần đọc/ghi gần nhất
+    var baselineDate: Date?            // ngày sửa file ở thời điểm đó
+    var lastSignature = 0
+    var watchTimer: Timer?
+    var conflictShowing = false
+    var projectGoneShowing = false
 
     // MARK: Views
     let textView = UITextView()
@@ -52,6 +61,7 @@ final class EditorViewController: UIViewController {
     var previewItem: UIBarButtonItem!
     var runItem: UIBarButtonItem!
     var helpItem: UIBarButtonItem!
+    var buildItem: UIBarButtonItem!
 
     let sidebar = UIView()
     let sidebarHeader = UIView()
@@ -120,10 +130,19 @@ final class EditorViewController: UIViewController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         flushSave()
+        stopWatchingExternalChanges()
         if isMovingFromParent {
             // Người dùng chủ động quay về danh sách → lần sau mở app sẽ vào danh sách.
             SettingsStore.shared.update { $0.lastProject = nil }
+            #if CATNIP_HAS_ISH
+            IshRuntime.shared.leaveProject()   // shell quay về /root
+            #endif
         }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startWatchingExternalChanges()
     }
 
     // MARK: Build
@@ -140,6 +159,7 @@ final class EditorViewController: UIViewController {
                                   style: .plain, target: self, action: #selector(runTapped))
         helpItem = UIBarButtonItem(image: UIImage(systemName: "questionmark.circle"),
                                    style: .plain, target: self, action: #selector(helpTapped))
+        buildItem = UIBarButtonItem(image: UIImage(systemName: "hammer"), menu: makeBuildMenu())
         // Menu "⋯": Log, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
         langItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: nil)
         rebuildLanguageMenu()
@@ -149,6 +169,7 @@ final class EditorViewController: UIViewController {
     func updateNavItems() {
         guard langItem != nil else { return }
         var items: [UIBarButtonItem] = [langItem, saveItem]
+        items.append(buildItem)
         if kind.canRun { items.append(runItem) }
         if language == .markdown { items.append(previewItem) }
         items.append(helpItem)
@@ -254,7 +275,11 @@ final class EditorViewController: UIViewController {
             language = Language.detect(path)
             textView.isEditable = true
             textView.text = text
+            baselineText = text
+            baselineDate = store.modificationDate(project: project, path: path)
         } else {
+            baselineText = nil
+            baselineDate = nil
             canEdit = false
             language = .plaintext
             textView.isEditable = false
@@ -275,6 +300,8 @@ final class EditorViewController: UIViewController {
 
     func showNoFile() {
         currentPath = nil
+        baselineText = nil
+        baselineDate = nil
         canEdit = false
         isDirty = false
         language = .plaintext
@@ -300,8 +327,17 @@ final class EditorViewController: UIViewController {
     func flushSave() -> Bool {
         saveWork?.cancel()
         guard isDirty, canEdit, let path = currentPath else { return true }
+        // File vừa bị sửa ở nơi khác (Tệp, shell…): không ghi đè mà hỏi người dùng.
+        if hasExternalConflict(path) {
+            promptConflict(path)
+            return false
+        }
         do {
-            try store.write(project: project, path: path, content: textView.text ?? "")
+            let text = textView.text ?? ""
+            try store.write(project: project, path: path, content: text)
+            baselineText = text
+            baselineDate = store.modificationDate(project: project, path: path)
+            lastSignature = store.signature(project: project)
             isDirty = false
             updateTitle()
             return true
@@ -453,6 +489,10 @@ final class EditorViewController: UIViewController {
         let font = Appearance.codeFont()
         let lang: Language = textView.textStorage.length > 200_000 ? .plaintext : language
         SyntaxHighlighter.apply(to: textView.textStorage, language: lang, theme: t, font: font)
+        spellIssues = []
+        if lang == .markdown, SettingsStore.shared.settings.spellCheckMarkdown, textView.textStorage.length <= 100_000 {
+            spellIssues = VietnameseSpell.apply(to: textView.textStorage)
+        }
         textView.typingAttributes = [.font: font, .foregroundColor: t.fgColor]
     }
 
@@ -523,7 +563,15 @@ final class EditorViewController: UIViewController {
         let line = gutter.paragraphIndex(of: loc) + 1
         let lineStart = ns.lineRange(for: NSRange(location: loc, length: 0)).location
         let col = loc - lineStart + 1
-        return "\(language.displayName) · Dòng \(line), Cột \(col) · \(ns.length) ký tự"
+        var summary = "\(language.displayName) · Dòng \(line), Cột \(col) · \(ns.length) ký tự"
+        if !spellIssues.isEmpty {
+            summary += " · ⚠︎ \(spellIssues.count) lỗi chính tả"
+            if let hit = spellIssues.first(where: { NSLocationInRange(loc, $0.range) || loc == $0.range.location + $0.range.length }) {
+                let word = ns.substring(with: hit.range)
+                summary = hit.suggestion.map { "⚠︎ \"\(word)\" → \"\($0)\"" } ?? "⚠︎ \"\(word)\" có thể sai chính tả"
+            }
+        }
+        return summary
     }
 
     func flash(_ message: String) {

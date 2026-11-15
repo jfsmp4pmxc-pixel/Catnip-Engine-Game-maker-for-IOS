@@ -119,6 +119,9 @@ final class ProjectListViewController: UIViewController {
         updateLeftItems()
         NotificationCenter.default.addObserver(self, selector: #selector(updateLeftItems),
                                                name: .catnipSettingsChanged, object: nil)
+        // Quay lại app sau khi sửa trong ứng dụng Tệp: làm mới danh sách dự án.
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshAfterForeground),
+                                               name: UIApplication.didBecomeActiveNotification, object: nil)
 
         table.translatesAutoresizingMaskIntoConstraints = false
         table.dataSource = self
@@ -164,6 +167,10 @@ final class ProjectListViewController: UIViewController {
         table.separatorColor = t.borderColor
         emptyLabel.textColor = t.mutedColor
         table.reloadData()
+    }
+
+    @objc private func refreshAfterForeground() {
+        if isViewLoaded, view.window != nil { reload() }
     }
 
     private func reload() {
@@ -389,7 +396,7 @@ final class SettingsViewController: UITableViewController {
         switch Section(rawValue: section)! {
         case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để xoá theme đã nhập."
         case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
-        case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật."
+        case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật. Soát chính tả tô đỏ tiếng/cụm từ tiếng Việt sai trong file .md (bỏ qua code, link và từ tiếng Anh)."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
         case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
@@ -410,7 +417,7 @@ final class SettingsViewController: UITableViewController {
         case .theme:   return themes.count + 1          // + "Nhập theme…"
         case .font:    return 1 + fonts.count + 1       // mặc định + font đã nhập + "Nhập font…"
         case .size:    return 2                         // bộ chỉnh + dòng xem trước
-        case .editing: return 4
+        case .editing: return 5
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
         case .tools:   return IshAvailability.isEmbedded ? 3 : 2   // bật shell + cỡ chữ shell (+ cài lại bộ công cụ)
@@ -523,9 +530,14 @@ final class SettingsViewController: UITableViewController {
                     SettingsStore.shared.update { $0.tabWidth = Int(v) }
                     self?.settingsChanged()
                 }
-            } else {
+            } else if indexPath.row == 3 {
                 switchCell(cell, text: "Thụt lề bằng ký tự Tab", isOn: st.useTabs) { [weak self] on in
                     SettingsStore.shared.update { $0.useTabs = on }
+                    self?.settingsChanged()
+                }
+            } else {
+                switchCell(cell, text: "Soát chính tả Markdown", isOn: st.spellCheckMarkdown) { [weak self] on in
+                    SettingsStore.shared.update { $0.spellCheckMarkdown = on }
                     self?.settingsChanged()
                 }
             }
