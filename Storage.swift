@@ -296,11 +296,13 @@ final class ProjectStore {
         guard !fm.fileExists(atPath: dst.path) else { throw StoreError.alreadyExists }
         do { try fm.moveItem(at: projectURL(old), to: dst) }
         catch { throw StoreError.io(error.localizedDescription) }
+        GitHubLinks.rename(old, to: n)
     }
 
     func deleteProject(_ name: String) throws {
         do { try fm.removeItem(at: projectURL(name)) }
         catch { throw StoreError.io(error.localizedDescription) }
+        GitHubLinks.remove(name)
     }
 
     /// Loại dự án, đọc từ .catnip.json (file ẩn). Dự án cũ chưa có file này thì đoán theo main.lua.

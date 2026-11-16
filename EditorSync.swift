@@ -21,7 +21,7 @@
 // Hai việc của editor liên quan tới "bên ngoài":
 //  1. Sửa file trực tiếp bằng ứng dụng Tệp (hoặc shell iSH) mà không gây lỗi: editor tự phát hiện thay đổi,
 //     làm mới cây file, nạp lại file đang mở nếu chưa sửa gì, và hỏi trước khi ghi đè nếu hai bên cùng sửa.
-//  2. Nút Build: hiện tại xuất dự án thành file .zip; kết nối GitHub sẽ có sau.
+//  2. Menu Build (trong "⋯"): xuất .zip; nút GitHub ở thanh trên (GitHub.swift, GitHubUI.swift).
 
 import UIKit
 
@@ -187,15 +187,20 @@ extension EditorViewController {
 
     // MARK: Nút Build
 
-    /// Menu của nút Build. Hiện tại: xuất .zip. Kết nối GitHub sẽ được thêm sau.
+    /// Nút GitHub ở thanh trên: mở màn hình kết nối repo, pull/push, workflows.
+    @objc func githubTapped() {
+        textView.resignFirstResponder()
+        let vc = GitHubViewController(project: project) { [weak self] in _ = self?.flushSave() }
+        let nav = CatnipNavigationController(rootViewController: vc)
+        topPresenter.present(nav, animated: true)
+    }
+
+    /// Menu con "Build" trong menu "⋯". Hiện tại: xuất .zip.
     func makeBuildMenu() -> UIMenu {
         let zip = UIAction(title: "Xuất dự án (.zip)", image: UIImage(systemName: "doc.zipper")) { [weak self] _ in
             self?.exportProjectZip()
         }
-        let github = UIAction(title: "Kết nối GitHub (sắp ra mắt)",
-                              image: UIImage(systemName: "arrow.triangle.branch"),
-                              attributes: .disabled) { _ in }
-        return UIMenu(title: "Build", children: [zip, github])
+        return UIMenu(title: "Build", image: UIImage(systemName: "hammer"), children: [zip])
     }
 
     /// Nén cả thư mục dự án thành <tên dự án>.zip rồi mở bảng chia sẻ (Lưu vào Tệp, AirDrop…).
@@ -228,7 +233,7 @@ extension EditorViewController {
         }
 
         let share = UIActivityViewController(activityItems: [file], applicationActivities: nil)
-        share.popoverPresentationController?.barButtonItem = buildItem
+        share.popoverPresentationController?.barButtonItem = langItem
         share.completionWithItemsHandler = { _, _, _, _ in
             try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
         }

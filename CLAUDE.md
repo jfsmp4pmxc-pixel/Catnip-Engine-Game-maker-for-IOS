@@ -10,14 +10,15 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Version: 0.3.x xong; đang làm 0.4.x "The True Workspaces".
 
 ## Cấu trúc
-- Swift/UIKit, `main.swift` là điểm vào (AppDelegate). File chính: `Editor.swift`, `EditorSidebar.swift` (cây file, copy/cut/paste), `UI.swift` (danh sách dự án + Cài đặt), `Storage.swift` (đường dẫn, `AppSettings`, `ProjectStore`), `Models.swift` (Theme, tô màu), `Themes.swift` (.tmTheme), `MarkdownPreview.swift` (WKWebView, offline), `Docs.swift` (tài liệu "?"), `Shell.swift` (shell tích hợp + `presentShell`), `EditorSync.swift` (phát hiện sửa file bên ngoài, nút Build/xuất .zip), `SpellCheck.swift` (soát chính tả tiếng Việt cho .md, không cần từ điển), `IshShell.swift` + `IshBridge.h/.m` (iSH), `GameRun.swift` + `LoveBridge.h/.mm` (LÖVE).
+- Swift/UIKit, `main.swift` là điểm vào (AppDelegate). File chính: `Editor.swift`, `EditorSidebar.swift` (cây file, copy/cut/paste), `UI.swift` (danh sách dự án + Cài đặt), `Storage.swift` (đường dẫn, `AppSettings`, `ProjectStore`), `Models.swift` (Theme, tô màu), `Themes.swift` (.tmTheme), `MarkdownPreview.swift` (WKWebView, offline), `Docs.swift` (tài liệu "?"), `Shell.swift` (shell tích hợp + `presentShell`), `EditorSync.swift` (phát hiện sửa file bên ngoài, menu Build/xuất .zip, nút GitHub), `GitHub.swift`/`GitHubUI.swift` (kết nối GitHub), `SpellCheck.swift` (soát chính tả tiếng Việt cho .md, không cần từ điển), `IshShell.swift` + `IshBridge.h/.m` (iSH), `GameRun.swift` + `LoveBridge.h/.mm` (LÖVE).
 - Dự án người dùng nằm trong **Documents** (xem được bằng app Tệp). Tên dành riêng: `Inbox`, `iSH`.
 - Cài đặt thêm trường mới vào `AppSettings` (Storage.swift): giải mã chịu lỗi bằng `decodeIfPresent` + giá trị mặc định.
 - Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (16 chương), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
 
 ## Đồng bộ với bên ngoài (Tệp/shell)
 - Editor quét chữ ký thư mục dự án mỗi 2 giây (luồng nền) khi đang hiện: làm mới cây file, nạp lại file đang mở nếu chưa sửa; `flushSave` không ghi đè khi file trên đĩa khác `baselineText` mà hỏi người dùng.
-- Nút Build (hammer): xuất .zip bằng `NSFileCoordinator .forUploading`; GitHub là mục "sắp ra mắt" (chưa làm).
+- Build nằm trong menu "⋯" (xuất .zip bằng `NSFileCoordinator .forUploading`). Nút GitHub (`arrow.triangle.branch`) ở thanh trên → `GitHubViewController`.
+- GitHub (`GitHub.swift` + `GitHubUI.swift`): REST API qua URLSession, token PAT trong Keychain (có file dự phòng khi IPA không ký không dùng được Keychain). Liên kết dự án↔repo ở `Application Support/Catnip/github-links.json` (`GitHubLinks`, đổi tên/xoá dự án đã nối). Pull/Push bằng Git Data API (blob→tree→commit→ref), so SHA blob với `synced` lần trước để phát hiện xung đột (hỏi giữ bản nào). Workflows: liệt kê, chạy `workflow_dispatch` (inputs `k=v`), xem runs/jobs/steps, chạy lại/huỷ. Chưa có: OAuth device flow, artifacts, log. **Chưa build/kiểm chứng.** Cây file editor ẩn file chấm nên `.github/workflows` sửa qua shell/Tệp.
 - Loại dự án: `love`, `scratch` dùng được; `python`, `twoObj` ("2o obj"), `catnip` ("Catnip Engine") là coming soon.
 - Soát chính tả: kiểm quy tắc âm tiết tiếng Việt + bảng cụm từ hay sai + Telex dở dang; bản mẫu Python đã thử trên docs (không báo sai). Thêm cụm sai vào `commonMistakes`.
 

@@ -61,7 +61,7 @@ final class EditorViewController: UIViewController {
     var previewItem: UIBarButtonItem!
     var runItem: UIBarButtonItem!
     var helpItem: UIBarButtonItem!
-    var buildItem: UIBarButtonItem!
+    var githubItem: UIBarButtonItem!
 
     let sidebar = UIView()
     let sidebarHeader = UIView()
@@ -159,8 +159,9 @@ final class EditorViewController: UIViewController {
                                   style: .plain, target: self, action: #selector(runTapped))
         helpItem = UIBarButtonItem(image: UIImage(systemName: "questionmark.circle"),
                                    style: .plain, target: self, action: #selector(helpTapped))
-        buildItem = UIBarButtonItem(image: UIImage(systemName: "hammer"), menu: makeBuildMenu())
-        // Menu "⋯": Log, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
+        githubItem = UIBarButtonItem(image: UIImage(systemName: "arrow.triangle.branch"),
+                                     style: .plain, target: self, action: #selector(githubTapped))
+        // Menu "⋯": Log, Shell, Build, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
         langItem = UIBarButtonItem(image: UIImage(systemName: "ellipsis.circle"), menu: nil)
         rebuildLanguageMenu()
     }
@@ -169,7 +170,7 @@ final class EditorViewController: UIViewController {
     func updateNavItems() {
         guard langItem != nil else { return }
         var items: [UIBarButtonItem] = [langItem, saveItem]
-        items.append(buildItem)
+        items.append(githubItem)
         if kind.canRun { items.append(runItem) }
         if language == .markdown { items.append(previewItem) }
         items.append(helpItem)
@@ -519,6 +520,7 @@ final class EditorViewController: UIViewController {
                 self?.presentShell()
             })
         }
+        top.append(makeBuildMenu())
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
         })

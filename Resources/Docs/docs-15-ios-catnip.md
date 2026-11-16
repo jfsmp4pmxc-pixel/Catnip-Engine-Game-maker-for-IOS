@@ -10,7 +10,14 @@ Dự án của bạn nằm trong thư mục **Documents** của Catnip. Vì vậ
 
 **Sửa file bằng ứng dụng Tệp (hoặc shell):** Catnip tự phát hiện thay đổi. Cây file được làm mới, file đang mở được nạp lại nếu bạn chưa sửa gì. Nếu cả hai bên cùng sửa một file, Catnip hỏi bạn giữ bản nào thay vì ghi đè. File bị xoá hay đổi tên bên ngoài cũng được báo rõ ràng.
 
-**Nút Build (🔨):** hiện tại xuất cả dự án thành file `.zip` để lưu vào Tệp, gửi qua AirDrop... Kết nối GitHub sẽ có sau.
+**Build:** nằm trong menu "⋯" → Build → "Xuất dự án (.zip)", để lưu vào Tệp, gửi qua AirDrop...
+
+**Nút GitHub (nhánh rẽ) trên thanh trên:**
+- Đăng nhập bằng Personal Access Token (quyền `repo` và `workflow`); token lưu trong Keychain của máy.
+- Gắn dự án với một repo: chọn repo có sẵn, tạo repo mới, hoặc nhập `owner/repo`.
+- **Pull** tải thay đổi từ GitHub về, **Push** đẩy thay đổi trên máy lên (mỗi lần Push là một commit). Nếu một file bị sửa ở cả hai phía, ứng dụng hỏi bạn giữ bản nào.
+- **Chạy workflow** (cần `on: workflow_dispatch` trong file workflow và đã Push) và **Tình trạng workflows**: xem từng lần chạy, từng job/bước, chạy lại hoặc huỷ.
+- File ẩn như `.github/workflows` được đồng bộ, nhưng cây file trong editor không hiện file bắt đầu bằng dấu chấm: hãy sửa chúng bằng shell hoặc ứng dụng Tệp.
 
 **Soát chính tả Markdown:** trong file `.md`, các tiếng hoặc cụm từ tiếng Việt sai chính tả được tô đỏ (bỏ qua code, link và từ tiếng Anh). Dòng trạng thái ở dưới cho biết số lỗi và gợi ý sửa khi con trỏ đang ở trên từ sai. Tắt trong Cài đặt → Soạn thảo.
 
