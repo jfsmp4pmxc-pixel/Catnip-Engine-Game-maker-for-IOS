@@ -19,7 +19,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Editor quét chữ ký thư mục dự án mỗi 2 giây (luồng nền) khi đang hiện: làm mới cây file, nạp lại file đang mở nếu chưa sửa; `flushSave` không ghi đè khi file trên đĩa khác `baselineText` mà hỏi người dùng.
 - Build nằm trong menu "⋯" (xuất .zip bằng `NSFileCoordinator .forUploading`). Nút GitHub (`arrow.triangle.branch`) ở thanh trên → `GitHubViewController`.
 - GitHub (`GitHub.swift` + `GitHubUI.swift`): REST API qua URLSession, token PAT trong Keychain (có file dự phòng khi IPA không ký không dùng được Keychain). Liên kết dự án↔repo ở `Application Support/Catnip/github-links.json` (`GitHubLinks`, đổi tên/xoá dự án đã nối). Pull/Push bằng Git Data API (blob→tree→commit→ref), so SHA blob với `synced` lần trước để phát hiện xung đột (hỏi giữ bản nào). Workflows: liệt kê, chạy `workflow_dispatch` (inputs `k=v`), xem runs/jobs/steps, chạy lại/huỷ. Chưa có: OAuth device flow, artifacts, log. **Chưa build/kiểm chứng.** Cây file editor ẩn file chấm nên `.github/workflows` sửa qua shell/Tệp.
-- Loại dự án: `love`, `scratch` dùng được; `python`, `twoObj` ("2o obj"), `catnip` ("Catnip Engine") là coming soon.
+- Loại dự án: `love`, `scratch` dùng được; `python`, `TwooObj` ("2o obj"), `catnip` ("Catnip Engine") là coming soon.
 - Soát chính tả: kiểm quy tắc âm tiết tiếng Việt + bảng cụm từ hay sai + Telex dở dang; bản mẫu Python đã thử trên docs (không báo sai). Thêm cụm sai vào `commonMistakes`.
 
 ## Build
@@ -35,10 +35,12 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Chỉ có một phiên pty tại một thời điểm (`gSession`); cài đặt/chuyển dự án đóng phiên shell rồi mở lại.
 - **Chưa kiểm chứng trên thiết bị**: mount động, cd tự động, đọc tiến trình apk. Nếu có log lỗi thì sửa theo log.
 
-## Bài học (lỗi đã gặp)
+## Bài học (lỗi đã gặp) và lưu ý
 - Nhãn Swift của hàm ObjC không đoán được ("With" lúc bỏ lúc giữ): dùng `NS_SWIFT_NAME` để cố định. `startSession(directory:command:output:exit:)`, `boot(withRoot:repositories:)`.
 - Lỗi C trong IshBridge.m: cần `#include "fs/path.h"` cho `AT_PWD`; `fakefs_import` không nằm trong libfakefs.
 - Lõi iSH dùng `__thread current`: chỉ mkdir/mount/ghi file guest khi `current` hợp lệ (lúc boot hoặc ngay sau `become_new_init_child`).
 - Mã thoát từ kernel iSH là `status << 8`.
 - Lua 5.1/LuaJIT: không có `string.rep` với separator, không có `+=`, `!=`.
 - Tuỳ chọn "ngắt dòng" (wrap lines) của editor còn lỗi; chủ dự án bảo bỏ qua.
+- 2o là "Twoo" không phải là "oo".
+- 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
