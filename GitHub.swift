@@ -312,7 +312,7 @@ struct GitHubLink: Codable {
     var repo: String                    // "owner/name"
     var branch: String
     var synced: [String: String] = [:]  // đường dẫn → SHA blob ở lần đồng bộ gần nhất
-    var pushItems: [String]? = nil      // tên các mục (file/thư mục ở gốc dự án) được push; nil = tất cả
+    var pushExclude: [String]? = nil    // file/thư mục (đường dẫn tương đối, ở mọi cấp) KHÔNG push; nil = push tất cả
 }
 
 enum GitHubLinks {
@@ -362,11 +362,6 @@ enum GitHubSync {
     }
 
     // MARK: File cục bộ
-
-    /// Tên các mục ở gốc dự án (file và thư mục) có thể chọn để push.
-    static func topLevelItems(_ dir: URL) -> [String] {
-        Array(Set(scanLocal(dir).keys.map { String($0.split(separator: "/", maxSplits: 1).first ?? "") })).sorted()
-    }
 
     private static func isSafe(_ path: String) -> Bool {
         if path.isEmpty || path == ".git" || path.hasPrefix(".git/") { return false }
@@ -499,7 +494,7 @@ enum GitHubSync {
 
     // MARK: Push
 
-    static func push(dir: URL, link: GitHubLink, message: String, force: Bool, include: Set<String>? = nil,
+    static func push(dir: URL, link: GitHubLink, message: String, force: Bool, exclude: [String] = [],
                      progress: Progress? = nil) async throws -> (PushResult, GitHubLink) {
         let api = GitHubAPI.shared
         progress?("Đang đọc trạng thái trên GitHub…")
@@ -514,8 +509,7 @@ enum GitHubSync {
         var link = link
         var synced = link.synced
         func inScope(_ path: String) -> Bool {
-            guard let inc = include else { return true }
-            return inc.contains(String(path.split(separator: "/", maxSplits: 1).first ?? ""))
+            !exclude.contains { path == $0 || path.hasPrefix($0 + "/") }
         }
         let local = scanLocal(dir).filter { inScope($0.key) }
         var datas: [String: Data] = [:]
