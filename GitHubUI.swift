@@ -573,17 +573,17 @@ final class GitHubRunsViewController: UITableViewController {
         super.viewDidLoad()
         title = "Tình trạng workflows"
         refreshControl = UIRefreshControl()
-        refreshControl?.addTarget(self, action: #selector(load), for: .valueChanged)
+        refreshControl?.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
         refreshControl?.beginRefreshing()
-        load()
+        fetch(silent: false)
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         timer?.invalidate()
-        let t = Timer(timeInterval: 6, repeats: true) { [weak self] _ in self?.load(silent: true) }
+        let t = Timer(timeInterval: 6, repeats: true) { [weak self] _ in self?.fetch(silent: true) }
         RunLoop.main.add(t, forMode: .common)
         timer = t
-        load(silent: true)
+        fetch(silent: true)
     }
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
@@ -591,9 +591,9 @@ final class GitHubRunsViewController: UITableViewController {
         timer = nil
     }
 
-    @objc private func load() { load(silent: false) }
+    @objc private func pullToRefresh() { fetch(silent: false) }
 
-    private func load(silent: Bool) {
+    private func fetch(silent: Bool) {
         Task { @MainActor in
             do { self.runs = try await GitHubAPI.shared.listRuns(self.repo) }
             catch { if !silent { self.showError(error) } }
@@ -648,16 +648,16 @@ final class GitHubRunDetailViewController: UITableViewController {
         super.viewDidLoad()
         title = "Lần chạy #\(run.runNumber)"
         refreshControl = UIRefreshControl()
-        refreshControl?.addTarget(self, action: #selector(load), for: .valueChanged)
+        refreshControl?.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
         updateMenu()
-        load()
+        fetch(silent: false)
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         timer?.invalidate()
         let t = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             guard let self = self, self.run.status != "completed" else { return }
-            self.load(silent: true)
+            self.fetch(silent: true)
         }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -684,14 +684,14 @@ final class GitHubRunDetailViewController: UITableViewController {
             do {
                 if rerun { try await GitHubAPI.shared.rerun(self.repo, run: self.run.id) }
                 else { try await GitHubAPI.shared.cancel(self.repo, run: self.run.id) }
-                self.load(silent: true)
+                self.fetch(silent: true)
             } catch { self.showError(error) }
         }
     }
 
-    @objc private func load() { load(silent: false) }
+    @objc private func pullToRefresh() { fetch(silent: false) }
 
-    private func load(silent: Bool) {
+    private func fetch(silent: Bool) {
         Task { @MainActor in
             do {
                 self.run = try await GitHubAPI.shared.getRun(self.repo, id: self.run.id)
