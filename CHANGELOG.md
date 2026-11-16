@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.4.5: True workspaces.
+### Added:
+- Connect Github.
+- more...
+
 ## v0.3.9: Linux!
 ### Added:
 - Custom tab size.
