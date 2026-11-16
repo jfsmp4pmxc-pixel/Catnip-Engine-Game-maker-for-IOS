@@ -520,7 +520,7 @@ final class EditorViewController: UIViewController {
                 self?.presentShell()
             })
         }
-        top.append(makeBuildMenu())
+        top.append(makeToolsMenu())
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
         })
@@ -710,6 +710,8 @@ extension EditorViewController: UITextViewDelegate {
                 || line.contains("function(") || line.contains("function (")
         case .python:
             return line.hasSuffix(":")
+        case .shell:
+            return ["then", "do", "{", "("].contains { line.hasSuffix($0) }
         case .plaintext, .markdown:
             return false
         default:

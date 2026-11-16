@@ -68,6 +68,9 @@ private let relativeFormatter: RelativeDateTimeFormatter = {
 
 // MARK: - Màn hình chính
 
+/// Việc cần làm ngay khi mở màn hình (từ mục "Công cụ" trong menu ⋯ của editor).
+enum GitHubAction { case pull, push, changeBranch, renameRepo, deleteRepo }
+
 final class GitHubViewController: UITableViewController {
     private struct Item {
         var title: String
@@ -86,9 +89,11 @@ final class GitHubViewController: UITableViewController {
     private var sections: [Section] = []
     private var busy = false
     private var status = ""
+    private var pending: GitHubAction?
 
-    init(project: String, onWillSync: @escaping () -> Void) {
+    init(project: String, start: GitHubAction? = nil, onWillSync: @escaping () -> Void) {
         self.project = project
+        self.pending = start
         self.onWillSync = onWillSync
         super.init(style: .insetGrouped)
     }
@@ -102,6 +107,25 @@ final class GitHubViewController: UITableViewController {
     }
 
     @objc private func close() { dismiss(animated: true) }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard let a = pending else { return }
+        pending = nil
+        perform(a)
+    }
+
+    private func perform(_ a: GitHubAction) {
+        guard GitHubAPI.shared.isSignedIn else { showError(GHError("Hãy đăng nhập GitHub trước (dán token).")); return }
+        guard link != nil else { showError(GHError("Dự án chưa gắn với repo nào. Hãy chọn hoặc tạo repo ở màn hình này.")); return }
+        switch a {
+        case .pull: doPull(overwrite: false)
+        case .push: choosePushItems()
+        case .changeBranch: changeBranch()
+        case .renameRepo: renameRepo()
+        case .deleteRepo: deleteRepo()
+        }
+    }
 
     private func setBusy(_ b: Bool, _ text: String = "") {
         busy = b
@@ -142,11 +166,10 @@ final class GitHubViewController: UITableViewController {
                 Item(title: "Đăng xuất", icon: "rectangle.portrait.and.arrow.right", destructive: true) { [weak self] in self?.signOut() },
             ]))
             if let l = link {
-                s.append(Section(header: "Repo của dự án “\(project)”", footer: status.isEmpty ? "Pull tải thay đổi từ GitHub về máy, Push đẩy thay đổi trên máy lên GitHub (tạo một commit). Cả hai đều không đụng tới file không liên quan." : status, items: [
+                s.append(Section(header: "Repo của dự án “\(project)”", footer: status.isEmpty ? "Pull, Push, đổi nhánh, đổi tên repo nằm trong menu ⋯ → Công cụ của editor." : status, items: [
                     Item(title: l.repo, subtitle: "Nhánh \(l.branch) · mở trên GitHub", icon: "arrow.triangle.branch", chevron: true) { openURL("https://github.com/\(l.repo)/tree/\(l.branch)") },
-                    Item(title: "Pull (tải về)", icon: "arrow.down.circle") { [weak self] in self?.doPull(overwrite: false) },
-                    Item(title: "Push (đẩy lên)…", icon: "arrow.up.circle") { [weak self] in self?.askPush() },
-                    Item(title: "Đổi nhánh…", icon: "arrow.triangle.swap") { [weak self] in self?.changeBranch() },
+                    Item(title: "Tạo repo mới…", icon: "plus.circle") { [weak self] in self?.createRepo() },
+                    Item(title: "Xoá repo trên GitHub…", icon: "trash", destructive: true) { [weak self] in self?.deleteRepo() },
                     Item(title: "Ngắt kết nối repo", icon: "link.badge.plus", destructive: true) { [weak self] in self?.disconnect() },
                 ]))
                 s.append(Section(header: "Workflows", footer: "Muốn chạy thủ công, workflow phải có “on: workflow_dispatch” và đã nằm trên GitHub (nhớ Push trước).", items: [
@@ -309,10 +332,80 @@ final class GitHubViewController: UITableViewController {
             guard let self = self else { return }
             let b = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !b.isEmpty else { return }
-            GitHubLinks.set(GitHubLink(repo: l.repo, branch: b), for: self.project)
-            self.link = GitHubLinks.link(for: self.project)
+            var nl = GitHubLink(repo: l.repo, branch: b)
+            nl.pushItems = l.pushItems
+            GitHubLinks.set(nl, for: self.project)
+            self.link = nl
             self.rebuild()
         }
+    }
+
+    private func renameRepo() {
+        guard let l = link else { return }
+        let current = String(l.repo.split(separator: "/").last ?? "")
+        promptText(title: "Đổi tên repo", message: "Tên mới của \(l.repo) trên GitHub.", placeholder: "tên-repo",
+                   initial: current, confirm: "Đổi tên") { [weak self] text in
+            guard let self = self else { return }
+            let name = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, name != current else { return }
+            self.setBusy(true, "Đang đổi tên…")
+            Task { @MainActor in
+                do {
+                    let r = try await GitHubAPI.shared.renameRepo(l.repo, to: name)
+                    var nl = l
+                    nl.repo = r.fullName
+                    GitHubLinks.set(nl, for: self.project)
+                    self.link = nl
+                    self.setBusy(false, "Đã đổi tên thành \(r.fullName).")
+                } catch {
+                    self.setBusy(false)
+                    self.showError(error)
+                }
+            }
+        }
+    }
+
+    private func deleteRepo() {
+        guard let l = link else { return }
+        promptText(title: "Xoá repo \(l.repo)?",
+                   message: "Không thể hoàn tác. Token cần quyền delete_repo. Gõ đúng \(l.repo) để xác nhận. File trên máy vẫn giữ.",
+                   placeholder: l.repo, confirm: "Xoá repo") { [weak self] text in
+            guard let self = self else { return }
+            guard text.trimmingCharacters(in: .whitespacesAndNewlines) == l.repo else {
+                self.showError(GHError("Tên nhập vào không khớp, chưa xoá gì."))
+                return
+            }
+            self.setBusy(true, "Đang xoá repo…")
+            Task { @MainActor in
+                do {
+                    try await GitHubAPI.shared.deleteRepo(l.repo)
+                    GitHubLinks.remove(self.project)
+                    self.link = nil
+                    self.setBusy(false, "Đã xoá \(l.repo).")
+                } catch {
+                    self.setBusy(false)
+                    self.showError(error)
+                }
+            }
+        }
+    }
+
+    /// Chọn các mục (file/thư mục ở gốc dự án) sẽ được push, rồi hỏi nội dung commit.
+    private func choosePushItems() {
+        guard let l = link else { return }
+        let items = GitHubSync.topLevelItems(projectDir)
+        guard !items.isEmpty else { showError(GHError("Dự án chưa có file nào để push.")); return }
+        let chosen = Set(l.pushItems ?? items).intersection(items)
+        let vc = GitHubPushItemsViewController(dir: projectDir, items: items, selected: chosen.isEmpty ? Set(items) : chosen) { [weak self] picked in
+            guard let self = self else { return }
+            self.navigationController?.popViewController(animated: true)
+            var nl = GitHubLinks.link(for: self.project) ?? l
+            nl.pushItems = picked.count == items.count ? nil : picked.sorted()
+            GitHubLinks.set(nl, for: self.project)
+            self.link = nl
+            self.askPush()
+        }
+        navigationController?.pushViewController(vc, animated: true)
     }
 
     private func disconnect() {
@@ -365,7 +458,8 @@ final class GitHubViewController: UITableViewController {
         let dir = projectDir
         Task { @MainActor in
             do {
-                let (res, newLink) = try await GitHubSync.push(dir: dir, link: l, message: message, force: force) { [weak self] text in
+                let (res, newLink) = try await GitHubSync.push(dir: dir, link: l, message: message, force: force,
+                                                               include: l.pushItems.map { Set($0) }) { [weak self] text in
                     DispatchQueue.main.async { self?.status = text; self?.rebuild() }
                 }
                 GitHubLinks.set(newLink, for: self.project)
@@ -409,6 +503,60 @@ final class GitHubViewController: UITableViewController {
     private func openRuns() {
         guard let l = link else { return }
         navigationController?.pushViewController(GitHubRunsViewController(repo: l.repo), animated: true)
+    }
+}
+
+// MARK: - Chọn mục để push
+
+final class GitHubPushItemsViewController: UITableViewController {
+    private let dir: URL
+    private let items: [String]
+    private var selected: Set<String>
+    private let onDone: (Set<String>) -> Void
+
+    init(dir: URL, items: [String], selected: Set<String>, onDone: @escaping (Set<String>) -> Void) {
+        self.dir = dir
+        self.items = items
+        self.selected = selected
+        self.onDone = onDone
+        super.init(style: .insetGrouped)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Chọn mục để push"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Tiếp", style: .done, target: self, action: #selector(done))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Tất cả/Không", style: .plain, target: self, action: #selector(toggleAll))
+    }
+    @objc private func done() {
+        guard !selected.isEmpty else { showError(GHError("Hãy chọn ít nhất một mục.")); return }
+        onDone(selected)
+    }
+    @objc private func toggleAll() {
+        selected = selected.count == items.count ? [] : Set(items)
+        tableView.reloadData()
+    }
+
+    override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int { items.count }
+    override func tableView(_ tv: UITableView, titleForFooterInSection section: Int) -> String? {
+        "Chỉ các mục được chọn mới được push; các mục khác trên GitHub không bị đụng tới. Lựa chọn được nhớ cho lần sau."
+    }
+    override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
+        let name = items[ip.row]
+        var isDir: ObjCBool = false
+        FileManager.default.fileExists(atPath: dir.appendingPathComponent(name).path, isDirectory: &isDir)
+        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        cell.textLabel?.text = name
+        cell.imageView?.image = UIImage(systemName: isDir.boolValue ? "folder" : "doc")
+        cell.accessoryType = selected.contains(name) ? .checkmark : .none
+        return cell
+    }
+    override func tableView(_ tv: UITableView, didSelectRowAt ip: IndexPath) {
+        tv.deselectRow(at: ip, animated: true)
+        let name = items[ip.row]
+        if selected.contains(name) { selected.remove(name) } else { selected.insert(name) }
+        tv.reloadRows(at: [ip], with: .none)
     }
 }
 
@@ -635,6 +783,7 @@ final class GitHubRunDetailViewController: UITableViewController {
     private let repo: String
     private var run: GHRun
     private var jobs: [GHJob] = []
+    private var artifacts: [GHArtifact] = []
     private var timer: Timer?
 
     init(repo: String, run: GHRun) {
@@ -670,7 +819,8 @@ final class GitHubRunDetailViewController: UITableViewController {
 
     private func updateMenu() {
         let open = UIAction(title: "Mở trên GitHub", image: UIImage(systemName: "safari")) { [run] _ in openURL(run.htmlUrl) }
-        var children: [UIMenuElement] = [open]
+        let arts = UIAction(title: "Mở artifacts trên GitHub", image: UIImage(systemName: "shippingbox")) { [run] _ in openURL(run.htmlUrl + "#artifacts") }
+        var children: [UIMenuElement] = [open, arts]
         if run.status == "completed" {
             children.append(UIAction(title: "Chạy lại", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in self?.act(rerun: true) })
         } else {
@@ -696,6 +846,7 @@ final class GitHubRunDetailViewController: UITableViewController {
             do {
                 self.run = try await GitHubAPI.shared.getRun(self.repo, id: self.run.id)
                 self.jobs = try await GitHubAPI.shared.jobs(self.repo, run: self.run.id)
+                self.artifacts = (try? await GitHubAPI.shared.listArtifacts(self.repo, run: self.run.id)) ?? []
             } catch { if !silent { self.showError(error) } }
             self.refreshControl?.endRefreshing()
             self.updateMenu()
@@ -705,7 +856,7 @@ final class GitHubRunDetailViewController: UITableViewController {
 
     override func numberOfSections(in tableView: UITableView) -> Int { 1 + jobs.count }
     override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int {
-        section == 0 ? 1 : (jobs[section - 1].steps?.count ?? 0)
+        section == 0 ? 1 + artifacts.count : (jobs[section - 1].steps?.count ?? 0) + 1
     }
     override func tableView(_ tv: UITableView, titleForHeaderInSection section: Int) -> String? {
         if section == 0 { return nil }
@@ -714,7 +865,20 @@ final class GitHubRunDetailViewController: UITableViewController {
     }
     override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
-        if ip.section == 0 {
+        cell.selectionStyle = .none
+        if ip.section == 0 && ip.row > 0 {
+            let a = artifacts[ip.row - 1]
+            cell.textLabel?.text = a.name
+            cell.detailTextLabel?.text = ByteCountFormatter.string(fromByteCount: Int64(a.sizeInBytes), countStyle: .file)
+                + (a.expired ? " · đã hết hạn" : " · chạm để tải .zip")
+            cell.imageView?.image = UIImage(systemName: "shippingbox")
+            cell.selectionStyle = a.expired ? .none : .default
+        } else if ip.section > 0 && ip.row == (jobs[ip.section - 1].steps?.count ?? 0) {
+            cell.textLabel?.text = "Xem log của job"
+            cell.imageView?.image = UIImage(systemName: "doc.plaintext")
+            cell.accessoryType = .disclosureIndicator
+            cell.selectionStyle = .default
+        } else if ip.section == 0 {
             cell.textLabel?.text = run.displayTitle ?? run.name ?? "Lần chạy #\(run.runNumber)"
             cell.textLabel?.numberOfLines = 0
             cell.detailTextLabel?.text = ghStatusText(status: run.status, conclusion: run.conclusion)
@@ -730,7 +894,100 @@ final class GitHubRunDetailViewController: UITableViewController {
             cell.imageView?.tintColor = c
         }
         cell.detailTextLabel?.textColor = .secondaryLabel
-        cell.selectionStyle = .none
         return cell
+    }
+
+    override func tableView(_ tv: UITableView, didSelectRowAt ip: IndexPath) {
+        tv.deselectRow(at: ip, animated: true)
+        if ip.section == 0 {
+            guard ip.row > 0 else { return }
+            let a = artifacts[ip.row - 1]
+            guard !a.expired else { return }
+            downloadArtifact(a, from: tv.cellForRow(at: ip))
+        } else if ip.row == (jobs[ip.section - 1].steps?.count ?? 0) {
+            let j = jobs[ip.section - 1]
+            navigationController?.pushViewController(GitHubLogViewController(repo: repo, job: j), animated: true)
+        }
+    }
+
+    private func downloadArtifact(_ a: GHArtifact, from cell: UIView?) {
+        let spin = UIActivityIndicatorView(style: .medium)
+        spin.startAnimating()
+        let old = navigationItem.rightBarButtonItem
+        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spin)
+        Task { @MainActor in
+            defer { self.navigationItem.rightBarButtonItem = old }
+            do {
+                let data = try await GitHubAPI.shared.downloadArtifact(self.repo, id: a.id)
+                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("catnip-artifact-\(UUID().uuidString)", isDirectory: true)
+                try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let file = dir.appendingPathComponent(a.name + ".zip")
+                try data.write(to: file)
+                let share = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+                share.popoverPresentationController?.sourceView = cell ?? self.view
+                share.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: dir) }
+                self.present(share, animated: true)
+            } catch {
+                self.showError(error)
+            }
+        }
+    }
+}
+
+// MARK: - Log của một job
+
+final class GitHubLogViewController: UIViewController {
+    private let repo: String
+    private let job: GHJob
+    private let textView = UITextView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+
+    init(repo: String, job: GHJob) {
+        self.repo = repo
+        self.job = job
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = job.name
+        view.backgroundColor = .systemBackground
+        textView.isEditable = false
+        textView.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        textView.alwaysBounceVertical = true
+        textView.frame = view.bounds
+        textView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(textView)
+        spinner.center = view.center
+        spinner.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        view.addSubview(spinner)
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reload)),
+            UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(shareLog)),
+        ]
+        reload()
+    }
+
+    @objc private func shareLog() {
+        let share = UIActivityViewController(activityItems: [textView.text ?? ""], applicationActivities: nil)
+        share.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?.last
+        present(share, animated: true)
+    }
+
+    @objc private func reload() {
+        spinner.startAnimating()
+        Task { @MainActor in
+            do {
+                var text = try await GitHubAPI.shared.jobLog(self.repo, job: self.job.id)
+                if text.utf8.count > 400_000 { text = "… (đã cắt bớt phần đầu)\n" + String(text.suffix(400_000)) }
+                self.textView.text = text.isEmpty ? "(Log trống hoặc chưa có. Job đang chạy thì thử tải lại sau.)" : text
+                let end = (self.textView.text as NSString).length
+                self.textView.scrollRangeToVisible(NSRange(location: max(0, end - 1), length: 1))
+            } catch {
+                self.textView.text = "Không tải được log: \(error.localizedDescription)"
+            }
+            self.spinner.stopAnimating()
+        }
     }
 }

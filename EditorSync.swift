@@ -189,10 +189,30 @@ extension EditorViewController {
 
     /// Nút GitHub ở thanh trên: mở màn hình kết nối repo, pull/push, workflows.
     @objc func githubTapped() {
+        presentGitHub(start: nil)
+    }
+
+    /// Mục "Công cụ" trong menu "⋯": các thao tác repo GitHub (mở màn hình GitHub và chạy ngay việc đã chọn).
+    func makeToolsMenu() -> UIMenu {
+        func item(_ title: String, _ icon: String, _ action: GitHubAction, destructive: Bool = false) -> UIAction {
+            UIAction(title: title, image: UIImage(systemName: icon), attributes: destructive ? .destructive : []) { [weak self] _ in
+                self?.presentGitHub(start: action)
+            }
+        }
+        return UIMenu(title: "Công cụ", image: UIImage(systemName: "wrench.and.screwdriver"), children: [
+            item("Pull (tải về từ GitHub)", "arrow.down.circle", .pull),
+            item("Push (đẩy lên GitHub)…", "arrow.up.circle", .push),
+            item("Đổi nhánh…", "arrow.triangle.swap", .changeBranch),
+            item("Đổi tên repo…", "pencil", .renameRepo),
+            item("Xoá repo…", "trash", .deleteRepo, destructive: true),
+            makeBuildMenu(),
+        ])
+    }
+
+    func presentGitHub(start: GitHubAction?) {
         textView.resignFirstResponder()
-        let vc = GitHubViewController(project: project) { [weak self] in _ = self?.flushSave() }
-        let nav = CatnipNavigationController(rootViewController: vc)
-        topPresenter.present(nav, animated: true)
+        let vc = GitHubViewController(project: project, start: start) { [weak self] in _ = self?.flushSave() }
+        topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
     }
 
     /// Menu con "Build" trong menu "⋯". Hiện tại: xuất .zip.

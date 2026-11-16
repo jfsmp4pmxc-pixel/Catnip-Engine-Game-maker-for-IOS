@@ -221,7 +221,7 @@ extension UIColor {
 // MARK: - Language
 
 enum Language: String, CaseIterable, Codable {
-    case lua, javascript, html, css, json, python, markdown, plaintext
+    case lua, javascript, html, css, json, python, swift, c, cpp, java, csharp, rust, go, shell, markdown, plaintext
 
     var displayName: String {
         switch self {
@@ -231,6 +231,14 @@ enum Language: String, CaseIterable, Codable {
         case .css:        return "CSS"
         case .json:       return "JSON"
         case .python:     return "Python"
+        case .swift:      return "Swift"
+        case .c:          return "C"
+        case .cpp:        return "C++"
+        case .java:       return "Java"
+        case .csharp:     return "C#"
+        case .rust:       return "Rust"
+        case .go:         return "Go"
+        case .shell:      return "Shell"
         case .markdown:   return "Markdown"
         case .plaintext:  return "Plain Text"
         }
@@ -245,6 +253,14 @@ enum Language: String, CaseIterable, Codable {
         case "css","scss","less":                return .css
         case "json":                             return .json
         case "py":                               return .python
+        case "swift":                            return .swift
+        case "c","h","m":                        return .c
+        case "cpp","cc","cxx","hpp","hh","hxx","mm","ino": return .cpp
+        case "java","kt","kts":                  return .java
+        case "cs":                               return .csharp
+        case "rs":                               return .rust
+        case "go":                               return .go
+        case "sh","bash","zsh":                  return .shell
         case "md","markdown":                    return .markdown
         default:                                 return .plaintext
         }
@@ -263,6 +279,33 @@ enum SyntaxHighlighter {
     private static func re(_ pattern: String) -> NSRegularExpression {
         return (try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]))
             ?? NSRegularExpression()
+    }
+
+    /// Bộ luật chung cho các ngôn ngữ họ C (Swift, C, C++, Java, C#, Rust, Go).
+    private static func cLike(keywords: String, bools: String, types: String,
+                              preproc: String?, attr: String?, rawStrings: Bool) -> [HighlightRule] {
+        var r: [HighlightRule] = [
+            HighlightRule(kind: .comment, regex: re("//[^\\n]*|/\\*[\\s\\S]*?\\*/"))
+        ]
+        let dq = "\"(?:\\\\[\\s\\S]|[^\\\\\"\\n])*\""
+        let sq = "'(?:\\\\[\\s\\S]|[^\\\\'\\n])*'"
+        if rawStrings {
+            r.append(HighlightRule(kind: .string, regex: re("\"\"\"[\\s\\S]*?\"\"\"|`[^`]*`|" + dq + "|" + sq)))
+        } else {
+            r.append(HighlightRule(kind: .string, regex: re(dq + "|" + sq)))
+        }
+        if let p = preproc { r.append(HighlightRule(kind: .decorator, regex: re(p))) }
+        if let a = attr { r.append(HighlightRule(kind: .decorator, regex: re(a))) }
+        r += [
+            HighlightRule(kind: .number,  regex: re("\\b(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?[fFlLuU]*)\\b")),
+            HighlightRule(kind: .keyword, regex: re("\\b(?:" + keywords + ")\\b")),
+            HighlightRule(kind: .bool,    regex: re("\\b(?:" + bools + ")\\b")),
+            HighlightRule(kind: .type,    regex: re("\\b(?:" + types + ")\\b|\\b[A-Z][A-Za-z0-9_]*\\b")),
+            HighlightRule(kind: .function,regex: re("\\b[A-Za-z_]\\w*(?=\\s*[(<])")),
+            HighlightRule(kind: .op,      regex: re("->|=>|::|[+\\-*/%=<>!&|^~?]+")),
+            HighlightRule(kind: .punct,   regex: re("[{}()\\[\\];,.:]"))
+        ]
+        return r
     }
 
     static func rules(for language: Language) -> [HighlightRule] {
@@ -330,6 +373,51 @@ enum SyntaxHighlighter {
                 HighlightRule(kind: .number,  regex: re("\\b(?:0[xX][0-9a-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b")),
                 HighlightRule(kind: .op,      regex: re("[+\\-*/%=<>!&|^~]+")),
                 HighlightRule(kind: .punct,   regex: re("[{}()\\[\\];,.:]"))
+            ]
+        case .swift:
+            return cLike(keywords: "associatedtype|actor|as|async|await|break|case|catch|class|continue|default|defer|deinit|do|else|enum|extension|fallthrough|fileprivate|final|for|func|guard|if|import|in|indirect|init|inout|internal|is|lazy|let|mutating|nonmutating|open|operator|override|private|protocol|public|repeat|required|rethrows|return|self|Self|static|struct|subscript|super|switch|throw|throws|try|typealias|var|weak|where|while|some|any|convenience|dynamic|optional|unowned",
+                         bools: "true|false|nil",
+                         types: "Int|UInt|Int8|Int16|Int32|Int64|UInt8|UInt16|UInt32|UInt64|Float|Double|Bool|String|Character|Array|Dictionary|Set|Optional|Any|AnyObject|Void|Data|Date|URL|CGFloat|CGPoint|CGSize|CGRect|UIView|UIViewController|NSObject|Error|Result",
+                         preproc: "#[a-zA-Z]+", attr: "@[A-Za-z_]\\w*", rawStrings: true)
+        case .c:
+            return cLike(keywords: "auto|break|case|const|continue|default|do|else|enum|extern|for|goto|if|inline|register|restrict|return|sizeof|static|struct|switch|typedef|union|volatile|while|_Bool|_Alignas|_Atomic",
+                         bools: "true|false|NULL|nil|YES|NO",
+                         types: "int|char|short|long|float|double|void|signed|unsigned|bool|size_t|ssize_t|ptrdiff_t|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|FILE|id|SEL|NSString|NSObject|BOOL",
+                         preproc: "^[ \\t]*#[ \\t]*[a-z]+", attr: nil, rawStrings: false)
+        case .cpp:
+            return cLike(keywords: "alignas|alignof|auto|break|case|catch|class|const|constexpr|const_cast|continue|decltype|default|delete|do|dynamic_cast|else|enum|explicit|export|extern|final|for|friend|goto|if|inline|mutable|namespace|new|noexcept|operator|override|private|protected|public|register|reinterpret_cast|return|sizeof|static|static_assert|static_cast|struct|switch|template|this|throw|try|typedef|typeid|typename|union|using|virtual|volatile|while|concept|requires|co_await|co_return|co_yield",
+                         bools: "true|false|nullptr|NULL",
+                         types: "int|char|short|long|float|double|void|signed|unsigned|bool|wchar_t|size_t|string|vector|map|set|unordered_map|unordered_set|array|list|deque|pair|tuple|unique_ptr|shared_ptr|weak_ptr|optional|variant|std|cout|cin|cerr|endl|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t",
+                         preproc: "^[ \\t]*#[ \\t]*[a-z]+", attr: nil, rawStrings: false)
+        case .java:
+            return cLike(keywords: "abstract|assert|break|case|catch|class|continue|default|do|else|enum|extends|final|finally|for|if|implements|import|instanceof|interface|native|new|package|private|protected|public|return|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|volatile|while|fun|val|var|when|object|data|sealed|override|suspend",
+                         bools: "true|false|null",
+                         types: "int|long|short|byte|char|float|double|boolean|void|String|Integer|Long|Double|Boolean|Object|List|Map|Set|ArrayList|HashMap|Exception|System|Math|Int|Unit|Any",
+                         preproc: nil, attr: "@[A-Za-z_]\\w*", rawStrings: false)
+        case .csharp:
+            return cLike(keywords: "abstract|as|async|await|base|break|case|catch|checked|class|const|continue|default|delegate|do|else|enum|event|explicit|extern|finally|fixed|for|foreach|goto|if|implicit|in|interface|internal|is|lock|namespace|new|operator|out|override|params|partial|private|protected|public|readonly|ref|return|sealed|sizeof|stackalloc|static|struct|switch|this|throw|try|typeof|unchecked|unsafe|using|var|virtual|volatile|while|yield|record|init|get|set",
+                         bools: "true|false|null",
+                         types: "int|uint|long|ulong|short|ushort|byte|sbyte|char|float|double|decimal|bool|void|string|object|dynamic|List|Dictionary|Task|Console|Math|Exception",
+                         preproc: "^[ \\t]*#[ \\t]*[a-z]+", attr: nil, rawStrings: false)
+        case .rust:
+            return cLike(keywords: "as|async|await|break|const|continue|crate|dyn|else|enum|extern|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|type|unsafe|use|where|while",
+                         bools: "true|false",
+                         types: "i8|i16|i32|i64|i128|isize|u8|u16|u32|u64|u128|usize|f32|f64|bool|char|str|String|Vec|Option|Result|Box|Rc|Arc|HashMap|HashSet|Some|None|Ok|Err",
+                         preproc: nil, attr: "#!?\\[[^\\]\\n]*\\]", rawStrings: false)
+        case .go:
+            return cLike(keywords: "break|case|chan|const|continue|default|defer|else|fallthrough|for|func|go|goto|if|import|interface|map|package|range|return|select|struct|switch|type|var",
+                         bools: "true|false|nil|iota",
+                         types: "int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|uintptr|float32|float64|complex64|complex128|bool|byte|rune|string|error|any|fmt|len|cap|make|append|panic|recover",
+                         preproc: nil, attr: nil, rawStrings: true)
+        case .shell:
+            return [
+                HighlightRule(kind: .comment, regex: re("(?<![\\w$])#[^\\n]*")),
+                HighlightRule(kind: .string,  regex: re("\"(?:\\\\[\\s\\S]|[^\\\\\"])*\"|'[^']*'")),
+                HighlightRule(kind: .type,    regex: re("\\$\\{[^}\\n]*\\}|\\$[A-Za-z_]\\w*|\\$[0-9@#?*!$-]")),
+                HighlightRule(kind: .keyword, regex: re("\\b(?:if|then|else|elif|fi|for|while|until|do|done|case|esac|in|function|select|return|exit|break|continue|export|local|readonly|declare|source|alias|unset|shift|trap|set)\\b")),
+                HighlightRule(kind: .number,  regex: re("\\b\\d+\\b")),
+                HighlightRule(kind: .op,      regex: re("[|&;<>=!]+")),
+                HighlightRule(kind: .punct,   regex: re("[{}()\\[\\]]"))
             ]
         case .markdown:
             return [

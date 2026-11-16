@@ -140,6 +140,14 @@ struct GHJob: Decodable {
 }
 struct GHJobList: Decodable { let jobs: [GHJob] }
 
+struct GHArtifact: Decodable {
+    let id: Int
+    let name: String
+    let sizeInBytes: Int
+    let expired: Bool
+}
+struct GHArtifactList: Decodable { let artifacts: [GHArtifact] }
+
 private struct GHSha: Decodable { let sha: String }
 private struct GHRefObject: Decodable { let object: GHSha }
 private struct GHCommit: Decodable { let sha: String; let tree: GHSha }
@@ -258,6 +266,25 @@ final class GitHubAPI {
                        body: ["name": name, "private": isPrivate, "description": description, "auto_init": true])
     }
 
+    func renameRepo(_ repo: String, to name: String) async throws -> GHRepo {
+        try await send(GHRepo.self, "PATCH", "/repos/\(repo)", body: ["name": name])
+    }
+    func deleteRepo(_ repo: String) async throws { try await call("DELETE", "/repos/\(repo)") }
+
+    // MARK: Log & artifacts
+
+    /// Log của một job (văn bản thuần). GitHub trả về chuyển hướng tới địa chỉ tạm; URLSession tự theo.
+    func jobLog(_ repo: String, job: Int) async throws -> String {
+        let d = try await call("GET", "/repos/\(repo)/actions/jobs/\(job)/logs")
+        return String(decoding: d, as: UTF8.self)
+    }
+    func listArtifacts(_ repo: String, run: Int) async throws -> [GHArtifact] {
+        try await get(GHArtifactList.self, "/repos/\(repo)/actions/runs/\(run)/artifacts", query: ["per_page": "100"]).artifacts
+    }
+    func downloadArtifact(_ repo: String, id: Int) async throws -> Data {
+        try await call("GET", "/repos/\(repo)/actions/artifacts/\(id)/zip")
+    }
+
     // MARK: Workflows
 
     func listWorkflows(_ repo: String) async throws -> [GHWorkflow] {
@@ -285,6 +312,7 @@ struct GitHubLink: Codable {
     var repo: String                    // "owner/name"
     var branch: String
     var synced: [String: String] = [:]  // đường dẫn → SHA blob ở lần đồng bộ gần nhất
+    var pushItems: [String]? = nil      // tên các mục (file/thư mục ở gốc dự án) được push; nil = tất cả
 }
 
 enum GitHubLinks {
@@ -334,6 +362,11 @@ enum GitHubSync {
     }
 
     // MARK: File cục bộ
+
+    /// Tên các mục ở gốc dự án (file và thư mục) có thể chọn để push.
+    static func topLevelItems(_ dir: URL) -> [String] {
+        Array(Set(scanLocal(dir).keys.map { String($0.split(separator: "/", maxSplits: 1).first ?? "") })).sorted()
+    }
 
     private static func isSafe(_ path: String) -> Bool {
         if path.isEmpty || path == ".git" || path.hasPrefix(".git/") { return false }
@@ -466,7 +499,7 @@ enum GitHubSync {
 
     // MARK: Push
 
-    static func push(dir: URL, link: GitHubLink, message: String, force: Bool,
+    static func push(dir: URL, link: GitHubLink, message: String, force: Bool, include: Set<String>? = nil,
                      progress: Progress? = nil) async throws -> (PushResult, GitHubLink) {
         let api = GitHubAPI.shared
         progress?("Đang đọc trạng thái trên GitHub…")
@@ -480,7 +513,11 @@ enum GitHubSync {
 
         var link = link
         var synced = link.synced
-        let local = scanLocal(dir)
+        func inScope(_ path: String) -> Bool {
+            guard let inc = include else { return true }
+            return inc.contains(String(path.split(separator: "/", maxSplits: 1).first ?? ""))
+        }
+        let local = scanLocal(dir).filter { inScope($0.key) }
         var datas: [String: Data] = [:]
         var localSHA: [String: String] = [:]
         for (p, u) in local {
@@ -504,7 +541,7 @@ enum GitHubSync {
                 upload.append(path)
             }
         }
-        for (path, base) in synced where localSHA[path] == nil {
+        for (path, base) in synced where localSHA[path] == nil && inScope(path) {
             guard let rsha = remote.files[path] else { synced[path] = nil; continue }
             if rsha == base || force { delete.append(path) }
         }
