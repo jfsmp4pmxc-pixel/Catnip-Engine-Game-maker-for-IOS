@@ -574,6 +574,7 @@ final class GitHubPushItemsViewController: UITableViewController {
         super.viewDidLoad()
         title = prefix.isEmpty ? "Chọn file để push" : (prefix as NSString).lastPathComponent
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Tiếp", style: .done, target: self, action: #selector(done))
+        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Tất cả/Không", style: .plain, target: self, action: #selector(toggleLevel))
         var dirs = Set<String>(), files: [String] = []
         let cut = prefix.isEmpty ? 0 : prefix.count + 1
         for f in selection.files(under: prefix) {
@@ -586,30 +587,47 @@ final class GitHubPushItemsViewController: UITableViewController {
 
     @objc private func done() { onDone() }
 
+    /// Chọn/bỏ chọn mọi file nằm trong thư mục đang xem (vẫn là chọn từng file, không chọn "thư mục").
+    @objc private func toggleLevel() {
+        let list = selection.files(under: prefix)
+        if list.allSatisfy({ !selection.excluded.contains($0) }) { selection.excluded.formUnion(list) }
+        else { selection.excluded.subtract(list) }
+        tableView.reloadData()
+    }
+
     override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
     override func tableView(_ tv: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Tick từng file hoặc cả thư mục (chạm vào thư mục để mở ra chọn từng file bên trong). File không tick sẽ không được push. Lựa chọn được nhớ cho lần sau."
+        "Chỉ chọn được từng file: chạm vào thư mục để mở ra rồi tick các file bên trong. File không tick sẽ không được push. Lựa chọn được nhớ cho lần sau."
     }
 
     override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let r = rows[ip.row]
-        let cell = UITableViewCell(style: .default, reuseIdentifier: nil)
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = r.name
         cell.imageView?.image = UIImage(systemName: r.isDir ? "folder" : "doc")
-        let st = selection.state(of: r.path, isDir: r.isDir)
-        let icon = st == 2 ? "checkmark.circle.fill" : (st == 1 ? "minus.circle.fill" : "circle")
-        let b = UIButton(type: .system)
-        b.setImage(UIImage(systemName: icon), for: .normal)
-        b.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-        b.tag = ip.row
-        b.addTarget(self, action: #selector(boxTapped(_:)), for: .touchUpInside)
-        cell.accessoryView = b
+        if r.isDir {
+            // Thư mục chỉ để mở ra, không có ô tick.
+            let list = selection.files(under: r.path)
+            let on = list.filter { !selection.excluded.contains($0) }.count
+            cell.detailTextLabel?.text = "\(on)/\(list.count) file được chọn"
+            cell.detailTextLabel?.textColor = .secondaryLabel
+            cell.accessoryType = .disclosureIndicator
+        } else {
+            let on = !selection.excluded.contains(r.path)
+            let b = UIButton(type: .system)
+            b.setImage(UIImage(systemName: on ? "checkmark.circle.fill" : "circle"), for: .normal)
+            b.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+            b.tag = ip.row
+            b.addTarget(self, action: #selector(boxTapped(_:)), for: .touchUpInside)
+            cell.accessoryView = b
+        }
         return cell
     }
 
     @objc private func boxTapped(_ b: UIButton) {
         let r = rows[b.tag]
-        selection.toggle(r.path, isDir: r.isDir)
+        guard !r.isDir else { return }
+        selection.toggle(r.path, isDir: false)
         tableView.reloadData()
     }
 
