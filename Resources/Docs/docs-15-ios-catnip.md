@@ -12,11 +12,11 @@ Dự án của bạn nằm trong thư mục **Documents** của Catnip. Vì vậ
 
 **Build:** nằm trong menu "⋯" → Build → "Xuất dự án (.zip)", để lưu vào Tệp, gửi qua AirDrop...
 
-**Nút GitHub (nhánh rẽ) trên thanh trên:**
+**GitHub (menu "⋯" → Công cụ):**
 - Đăng nhập bằng Personal Access Token (quyền `repo` và `workflow`); token lưu trong Keychain của máy.
 - Gắn dự án với một repo: chọn repo có sẵn, tạo repo mới, hoặc nhập `owner/repo`.
-- Trong menu "⋯" → **Công cụ**: **Pull** tải thay đổi từ GitHub về, **Push** đẩy lên (mỗi lần Push là một commit và chỉ đẩy các file hoặc thư mục con bạn tick, ở bất kỳ cấp nào), đổi nhánh, đổi tên repo, xoá repo. Nếu một file bị sửa ở cả hai phía, ứng dụng hỏi bạn giữ bản nào.
-- **Chạy workflow** (cần `on: workflow_dispatch` trong file workflow và đã Push) và **Tình trạng workflows**: xem từng lần chạy, từng job/bước, đọc log của job, tải artifact (.zip), chạy lại hoặc huỷ.
+- **Pull** tải thay đổi từ GitHub về, **Push** đẩy lên (mỗi lần Push là một commit và chỉ đẩy các file hoặc thư mục con bạn tick, ở bất kỳ cấp nào), đổi nhánh, đổi tên repo, xoá repo. Nếu một file bị sửa ở cả hai phía, ứng dụng hỏi bạn giữ bản nào.
+- **Chạy workflow** (form nhập input theo khai báo của workflow: ô văn bản, công tắc, danh sách chọn; cần `on: workflow_dispatch` trong file workflow và đã Push) và **Tình trạng workflows**: xem từng lần chạy, từng job/bước, đọc log của job, tải artifact (.zip), chạy lại hoặc huỷ.
 - File ẩn như `.github/workflows` được đồng bộ, nhưng cây file trong editor không hiện file bắt đầu bằng dấu chấm: hãy sửa chúng bằng shell hoặc ứng dụng Tệp.
 
 **Soát chính tả Markdown:** trong file `.md`, các tiếng hoặc cụm từ tiếng Việt sai chính tả được tô đỏ (bỏ qua code, link và từ tiếng Anh). Dòng trạng thái ở dưới cho biết số lỗi và gợi ý sửa khi con trỏ đang ở trên từ sai. Tắt trong Cài đặt → Soạn thảo.

@@ -69,7 +69,7 @@ private let relativeFormatter: RelativeDateTimeFormatter = {
 // MARK: - Màn hình chính
 
 /// Việc cần làm ngay khi mở màn hình (từ mục "Công cụ" trong menu ⋯ của editor).
-enum GitHubAction { case pull, push, changeBranch, renameRepo, deleteRepo }
+enum GitHubAction { case screen, pull, push, changeBranch, renameRepo, deleteRepo, workflows, runs }
 
 final class GitHubViewController: UITableViewController {
     private struct Item {
@@ -116,9 +116,13 @@ final class GitHubViewController: UITableViewController {
     }
 
     private func perform(_ a: GitHubAction) {
+        if a == .screen { return }
         guard GitHubAPI.shared.isSignedIn else { showError(GHError("Hãy đăng nhập GitHub trước (dán token).")); return }
         guard link != nil else { showError(GHError("Dự án chưa gắn với repo nào. Hãy chọn hoặc tạo repo ở màn hình này.")); return }
         switch a {
+        case .screen: break
+        case .workflows: openWorkflows()
+        case .runs: openRuns()
         case .pull: doPull(overwrite: false)
         case .push: choosePushItems()
         case .changeBranch: changeBranch()
@@ -733,36 +737,197 @@ final class GitHubWorkflowsViewController: UITableViewController {
     }
     override func tableView(_ tv: UITableView, didSelectRowAt ip: IndexPath) {
         tv.deselectRow(at: ip, animated: true)
-        let w = workflows[ip.row]
-        promptText(title: "Chạy “\(w.name)”",
-                   message: "Nhánh \(branch). Nếu workflow có input, nhập dạng khoá=giá trị, cách nhau bằng dấu phẩy (để trống nếu không có).",
-                   placeholder: "version=1.0, configuration=Release", confirm: "Chạy") { [weak self] text in
-            self?.run(w, inputsText: text)
+        navigationController?.pushViewController(
+            GitHubDispatchFormViewController(repo: repo, workflow: workflows[ip.row], branch: branch), animated: true)
+    }
+}
+
+// MARK: - Form nhập input để chạy workflow
+
+final class GitHubDispatchFormViewController: UITableViewController, UITextFieldDelegate {
+    private let repo: String
+    private let workflow: GHWorkflow
+    private var ref: String
+    private var inputs: [GHInput] = []
+    private var values: [String: String] = [:]
+    private var extra = ""
+    private var branches: [String] = []
+    private var note = "Đang đọc khai báo input…"
+    private var running = false
+
+    init(repo: String, workflow: GHWorkflow, branch: String) {
+        self.repo = repo
+        self.workflow = workflow
+        self.ref = branch
+        super.init(style: .insetGrouped)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = workflow.name
+        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Chạy", style: .done, target: self, action: #selector(runTapped))
+        tableView.keyboardDismissMode = .interactive
+        loadDefinition()
+        Task { @MainActor in
+            self.branches = (try? await GitHubAPI.shared.listBranches(self.repo)) ?? []
+            self.tableView.reloadData()
         }
     }
 
-    private func run(_ w: GHWorkflow, inputsText: String) {
-        var inputs: [String: String] = [:]
-        for part in inputsText.split(separator: ",") {
-            let kv = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            if kv.count == 2, !kv[0].isEmpty { inputs[kv[0]] = kv[1] }
-        }
-        spinner.startAnimating()
+    private func loadDefinition() {
+        note = "Đang đọc khai báo input…"
         Task { @MainActor in
             do {
-                try await GitHubAPI.shared.dispatch(self.repo, workflow: w.id, ref: self.branch, inputs: inputs)
-                self.spinner.stopAnimating()
-                let ac = UIAlertController(title: "Đã yêu cầu chạy", message: "GitHub sẽ bắt đầu trong vài giây. Xem ở “Tình trạng workflows”.", preferredStyle: .alert)
+                let yaml = try await GitHubAPI.shared.workflowFile(self.repo, path: self.workflow.path, ref: self.ref)
+                self.inputs = WorkflowYAML.dispatchInputs(yaml)
+                self.note = self.inputs.isEmpty ? "Workflow này không khai báo input nào." : "* là bắt buộc."
+            } catch {
+                self.inputs = []
+                self.note = "Không đọc được file workflow trên nhánh “\(self.ref)” (đã Push chưa?). Bạn vẫn có thể nhập input thủ công ở dưới."
+            }
+            self.values = [:]
+            for i in self.inputs { self.values[i.name] = i.defaultValue }
+            self.tableView.reloadData()
+        }
+    }
+
+    // MARK: Bảng
+
+    override func numberOfSections(in tableView: UITableView) -> Int { 3 }
+    override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int {
+        section == 1 ? inputs.count : 1
+    }
+    override func tableView(_ tv: UITableView, titleForHeaderInSection section: Int) -> String? {
+        ["Chạy trên", "Input", "Input bổ sung (khoá=giá trị, cách nhau dấu phẩy)"][section]
+    }
+    override func tableView(_ tv: UITableView, titleForFooterInSection section: Int) -> String? {
+        section == 1 ? note : nil
+    }
+
+    private func menuButton(title: String, options: [String], selected: String, onPick: @escaping (String) -> Void) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(title + " ⌄", for: .normal)
+        b.menu = UIMenu(children: options.map { o in
+            UIAction(title: o, state: o == selected ? .on : .off) { _ in onPick(o) }
+        })
+        b.showsMenuAsPrimaryAction = true
+        b.sizeToFit()
+        return b
+    }
+
+    private func field(text: String, placeholder: String, tag: Int, number: Bool) -> UITextField {
+        let f = UITextField(frame: CGRect(x: 0, y: 0, width: 180, height: 36))
+        f.text = text
+        f.placeholder = placeholder
+        f.textAlignment = .right
+        f.autocapitalizationType = .none
+        f.autocorrectionType = .no
+        f.keyboardType = number ? .decimalPad : .default
+        f.returnKeyType = .done
+        f.delegate = self
+        f.tag = tag
+        f.addTarget(self, action: #selector(fieldChanged(_:)), for: .editingChanged)
+        return f
+    }
+
+    override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.selectionStyle = .none
+        cell.textLabel?.numberOfLines = 0
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.textColor = .secondaryLabel
+        switch ip.section {
+        case 0:
+            cell.textLabel?.text = "Nhánh / ref"
+            var opts = branches
+            if !opts.contains(ref) { opts.insert(ref, at: 0) }
+            cell.accessoryView = menuButton(title: ref, options: opts, selected: ref) { [weak self] pick in
+                guard let self = self, pick != self.ref else { return }
+                self.ref = pick
+                self.loadDefinition()
+            }
+        case 1:
+            let inp = inputs[ip.row]
+            cell.textLabel?.text = inp.name + (inp.required ? " *" : "")
+            cell.detailTextLabel?.text = inp.description.isEmpty ? nil : inp.description
+            let value = values[inp.name] ?? inp.defaultValue
+            switch inp.type {
+            case "boolean":
+                let sw = UISwitch()
+                sw.isOn = value.lowercased() == "true"
+                sw.tag = ip.row
+                sw.addTarget(self, action: #selector(switchChanged(_:)), for: .valueChanged)
+                cell.accessoryView = sw
+            case "choice":
+                cell.accessoryView = menuButton(title: value.isEmpty ? "Chọn…" : value, options: inp.options, selected: value) { [weak self] pick in
+                    self?.values[inp.name] = pick
+                    self?.tableView.reloadRows(at: [ip], with: .none)
+                }
+            default:
+                cell.accessoryView = field(text: value, placeholder: inp.defaultValue.isEmpty ? "giá trị" : inp.defaultValue,
+                                           tag: ip.row, number: inp.type == "number")
+            }
+        default:
+            cell.accessoryView = nil
+            let f = field(text: extra, placeholder: "ví dụ: version=1.0, debug=true", tag: -1, number: false)
+            f.textAlignment = .left
+            f.frame = CGRect(x: 20, y: 0, width: tv.bounds.width - 80, height: 44)
+            cell.contentView.addSubview(f)
+        }
+        return cell
+    }
+
+    // MARK: Thay đổi giá trị
+
+    @objc private func fieldChanged(_ f: UITextField) {
+        if f.tag < 0 { extra = f.text ?? ""; return }
+        values[inputs[f.tag].name] = f.text ?? ""
+    }
+    @objc private func switchChanged(_ sw: UISwitch) {
+        values[inputs[sw.tag].name] = sw.isOn ? "true" : "false"
+    }
+    func textFieldShouldReturn(_ tf: UITextField) -> Bool { tf.resignFirstResponder(); return true }
+
+    // MARK: Chạy
+
+    @objc private func runTapped() {
+        guard !running else { return }
+        view.endEditing(true)
+        var send: [String: String] = [:]
+        for inp in inputs {
+            let v = (values[inp.name] ?? inp.defaultValue).trimmingCharacters(in: .whitespaces)
+            if v.isEmpty {
+                if inp.required { showError(GHError("Input “\(inp.name)” là bắt buộc.")); return }
+                continue
+            }
+            send[inp.name] = v
+        }
+        for part in extra.split(separator: ",") {
+            let kv = part.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            if kv.count == 2, !kv[0].isEmpty { send[kv[0]] = kv[1] }
+        }
+        running = true
+        let spin = UIActivityIndicatorView(style: .medium)
+        spin.startAnimating()
+        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spin)
+        Task { @MainActor in
+            defer {
+                self.running = false
+                self.navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Chạy", style: .done, target: self, action: #selector(self.runTapped))
+            }
+            do {
+                try await GitHubAPI.shared.dispatch(self.repo, workflow: self.workflow.id, ref: self.ref, inputs: send)
+                let ac = UIAlertController(title: "Đã yêu cầu chạy", message: "GitHub sẽ bắt đầu trong vài giây.", preferredStyle: .alert)
                 ac.addAction(UIAlertAction(title: "Xem tình trạng", style: .default) { _ in
                     self.navigationController?.pushViewController(GitHubRunsViewController(repo: self.repo), animated: true)
                 })
                 ac.addAction(UIAlertAction(title: "OK", style: .cancel))
                 self.present(ac, animated: true)
             } catch {
-                self.spinner.stopAnimating()
                 var e: Error = error
                 if let g = error as? GHError, g.status == 422 {
-                    e = GHError(g.message + "\n\nWorkflow cần có “on: workflow_dispatch”, đã được Push lên nhánh \(self.branch), và các input phải đúng tên.", status: 422)
+                    e = GHError(g.message + "\n\nWorkflow cần có “on: workflow_dispatch”, đã Push lên nhánh \(self.ref), và input phải đúng tên/giá trị.", status: 422)
                 }
                 self.showError(e)
             }

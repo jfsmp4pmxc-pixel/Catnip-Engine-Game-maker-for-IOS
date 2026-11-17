@@ -431,6 +431,32 @@ enum SyntaxHighlighter {
         }
     }
 
+    /// Tô màu: các token thường trước, rồi chú thích/chuỗi được "bảo vệ" và tô đè cuối cùng.
+    /// Quét theo thứ tự trong văn bản (cái nào bắt đầu trước thì thắng): "//" trong chuỗi không thành chú thích,
+    /// còn mọi thứ sau dấu chú thích (kể cả chính dấu đó) đều một màu chú thích, bất kể có từ khoá hay không.
+    private static func paint(_ text: String, language: Language, theme: Theme, set: (NSRange, UIColor) -> Void) {
+        let full = NSRange(location: 0, length: (text as NSString).length)
+        let all = rules(for: language)
+        for rule in all where rule.kind != .comment && rule.kind != .string {
+            rule.regex.enumerateMatches(in: text, options: [], range: full) { m, _, _ in
+                if let m = m { set(m.range, theme.tokenColor(rule.kind)) }
+            }
+        }
+        var spans: [(range: NSRange, kind: TokenKind)] = []
+        for rule in all where rule.kind == .comment || rule.kind == .string {
+            rule.regex.enumerateMatches(in: text, options: [], range: full) { m, _, _ in
+                if let m = m, m.range.length > 0 { spans.append((m.range, rule.kind)) }
+            }
+        }
+        spans.sort { $0.range.location != $1.range.location ? $0.range.location < $1.range.location
+                                                             : $0.range.length > $1.range.length }
+        var end = 0
+        for sp in spans where sp.range.location >= end {
+            set(sp.range, theme.tokenColor(sp.kind))
+            end = sp.range.location + sp.range.length
+        }
+    }
+
     static func highlight(_ code: String,
                           language: Language,
                           theme: Theme,
@@ -439,13 +465,8 @@ enum SyntaxHighlighter {
             .font: font,
             .foregroundColor: theme.fgColor
         ])
-        let nsLen = (code as NSString).length
-        let full = NSRange(location: 0, length: nsLen)
-        for rule in rules(for: language) {
-            rule.regex.enumerateMatches(in: code, options: [], range: full) { m, _, _ in
-                guard let m = m else { return }
-                out.addAttribute(.foregroundColor, value: theme.tokenColor(rule.kind), range: m.range)
-            }
+        paint(code, language: language, theme: theme) { range, color in
+            out.addAttribute(.foregroundColor, value: color, range: range)
         }
         return out
     }
@@ -459,11 +480,8 @@ enum SyntaxHighlighter {
         let full = NSRange(location: 0, length: (text as NSString).length)
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: theme.fgColor], range: full)
-        for rule in rules(for: language) {
-            rule.regex.enumerateMatches(in: text, options: [], range: full) { m, _, _ in
-                guard let m = m else { return }
-                storage.addAttribute(.foregroundColor, value: theme.tokenColor(rule.kind), range: m.range)
-            }
+        paint(text, language: language, theme: theme) { range, color in
+            storage.addAttribute(.foregroundColor, value: color, range: range)
         }
         storage.endEditing()
     }

@@ -290,6 +290,14 @@ final class GitHubAPI {
     func listWorkflows(_ repo: String) async throws -> [GHWorkflow] {
         try await get(GHWorkflowList.self, "/repos/\(repo)/actions/workflows", query: ["per_page": "100"]).workflows
     }
+    func workflowFile(_ repo: String, path: String, ref: String) async throws -> String {
+        let d = try await call("GET", "/repos/\(repo)/contents/\(path)", query: ["ref": ref], raw: true)
+        return String(decoding: d, as: UTF8.self)
+    }
+    func listBranches(_ repo: String) async throws -> [String] {
+        struct B: Decodable { let name: String }
+        return try await get([B].self, "/repos/\(repo)/branches", query: ["per_page": "100"]).map { $0.name }
+    }
     func dispatch(_ repo: String, workflow: Int, ref: String, inputs: [String: String]) async throws {
         var body: [String: Any] = ["ref": ref]
         if !inputs.isEmpty { body["inputs"] = inputs }
@@ -575,5 +583,121 @@ enum GitHubSync {
         for p in delete { synced[p] = nil }
         link.synced = synced
         return (PushResult(uploaded: newSHA.count, deleted: delete.count, nothing: false), link)
+    }
+}
+
+
+// MARK: - Đọc input của workflow_dispatch từ file YAML
+
+struct GHInput {
+    var name: String
+    var description = ""
+    var required = false
+    var defaultValue = ""
+    var type = "string"          // string | boolean | choice | number | environment
+    var options: [String] = []
+}
+
+/// Bộ đọc YAML tối giản, chỉ đủ để lấy khối `on: workflow_dispatch: inputs:` của workflow.
+enum WorkflowYAML {
+    private struct Line { let indent: Int; let text: String }
+
+    private static func stripComment(_ s: String) -> String {
+        var quote: Character? = nil
+        var prev: Character = " "
+        for (i, ch) in s.enumerated() {
+            if let q = quote { if ch == q { quote = nil } }
+            else if ch == "\"" || ch == "'" { quote = ch }
+            else if ch == "#" && (i == 0 || prev == " " || prev == "\t") {
+                return String(s.prefix(i))
+            }
+            prev = ch
+        }
+        return s
+    }
+
+    private static func unquote(_ v: String) -> String {
+        let t = v.trimmingCharacters(in: .whitespaces)
+        if t.count >= 2, let f = t.first, let l = t.last, f == l, f == "\"" || f == "'" {
+            return String(t.dropFirst().dropLast())
+        }
+        return t
+    }
+
+    private static func splitKV(_ text: String) -> (String, String)? {
+        let chars = Array(text)
+        var quote: Character? = nil
+        for i in 0..<chars.count {
+            let ch = chars[i]
+            if let q = quote { if ch == q { quote = nil }; continue }
+            if ch == "\"" || ch == "'" { quote = ch; continue }
+            if ch == ":" && (i + 1 == chars.count || chars[i + 1] == " ") {
+                return (unquote(String(chars[..<i])), String(chars[(i + 1)...]).trimmingCharacters(in: .whitespaces))
+            }
+        }
+        return nil
+    }
+
+    static func dispatchInputs(_ yaml: String) -> [GHInput] {
+        var lines: [Line] = []
+        for raw in yaml.components(separatedBy: .newlines) {
+            let t = stripComment(raw)
+            let trimmed = t.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty { continue }
+            lines.append(Line(indent: t.prefix(while: { $0 == " " }).count, text: trimmed))
+        }
+        guard let wi = lines.firstIndex(where: { $0.text == "workflow_dispatch:" }) else { return [] }
+        let base = lines[wi].indent
+        var i = wi + 1
+        var inputsIdx: Int?
+        while i < lines.count, lines[i].indent > base {
+            if lines[i].text == "inputs:" { inputsIdx = i; break }
+            i += 1
+        }
+        guard let ii = inputsIdx else { return [] }
+        let inIndent = lines[ii].indent
+
+        var result: [GHInput] = []
+        var cur: GHInput?
+        var nameIndent: Int?
+        var optionsMode = false
+        var j = ii + 1
+        while j < lines.count, lines[j].indent > inIndent {
+            let l = lines[j]
+            j += 1
+            if nameIndent == nil { nameIndent = l.indent }
+            guard let ni = nameIndent else { continue }
+            if l.indent == ni {
+                if let c = cur { result.append(c) }
+                cur = splitKV(l.text).map { GHInput(name: $0.0) }
+                optionsMode = false
+            } else if l.indent > ni {
+                if l.text.hasPrefix("- ") {
+                    if optionsMode { cur?.options.append(unquote(String(l.text.dropFirst(2)))) }
+                } else if let (k, v) = splitKV(l.text) {
+                    optionsMode = false
+                    switch k {
+                    case "description": cur?.description = unquote(v)
+                    case "required": cur?.required = v.lowercased() == "true"
+                    case "default": cur?.defaultValue = unquote(v)
+                    case "type": cur?.type = unquote(v).lowercased()
+                    case "options":
+                        if v.isEmpty { optionsMode = true }
+                        else if v.hasPrefix("[") {
+                            cur?.options = v.trimmingCharacters(in: CharacterSet(charactersIn: "[] "))
+                                .split(separator: ",").map { unquote(String($0)) }.filter { !$0.isEmpty }
+                        }
+                    default: break
+                    }
+                }
+            }
+        }
+        if let c = cur { result.append(c) }
+        return result.filter { !$0.name.isEmpty }.map { inp in
+            var x = inp
+            if !x.options.isEmpty && x.type != "choice" { x.type = "choice" }
+            if x.type == "choice" && x.defaultValue.isEmpty { x.defaultValue = x.options.first ?? "" }
+            return x
+        }
     }
 }

@@ -187,11 +187,6 @@ extension EditorViewController {
 
     // MARK: Nút Build
 
-    /// Nút GitHub ở thanh trên: mở màn hình kết nối repo, pull/push, workflows.
-    @objc func githubTapped() {
-        presentGitHub(start: nil)
-    }
-
     /// Mục "Công cụ" trong menu "⋯": các thao tác repo GitHub (mở màn hình GitHub và chạy ngay việc đã chọn).
     func makeToolsMenu() -> UIMenu {
         func item(_ title: String, _ icon: String, _ action: GitHubAction, destructive: Bool = false) -> UIAction {
@@ -199,12 +194,22 @@ extension EditorViewController {
                 self?.presentGitHub(start: action)
             }
         }
+        func group(_ items: [UIMenuElement]) -> UIMenu { UIMenu(title: "", options: .displayInline, children: items) }
         return UIMenu(title: "Công cụ", image: UIImage(systemName: "wrench.and.screwdriver"), children: [
-            item("Pull (tải về từ GitHub)", "arrow.down.circle", .pull),
-            item("Push (đẩy lên GitHub)…", "arrow.up.circle", .push),
-            item("Đổi nhánh…", "arrow.triangle.swap", .changeBranch),
-            item("Đổi tên repo…", "pencil", .renameRepo),
-            item("Xoá repo…", "trash", .deleteRepo, destructive: true),
+            group([item("GitHub: đăng nhập, chọn/tạo repo…", "arrow.triangle.branch", .screen)]),
+            group([
+                item("Pull (tải về từ GitHub)", "arrow.down.circle", .pull),
+                item("Push (đẩy lên GitHub)…", "arrow.up.circle", .push),
+                item("Đổi nhánh…", "arrow.triangle.swap", .changeBranch),
+            ]),
+            group([
+                item("Chạy workflow…", "play.circle", .workflows),
+                item("Tình trạng workflows", "list.bullet.rectangle", .runs),
+            ]),
+            group([
+                item("Đổi tên repo…", "pencil", .renameRepo),
+                item("Xoá repo…", "trash", .deleteRepo, destructive: true),
+            ]),
             makeBuildMenu(),
         ])
     }
