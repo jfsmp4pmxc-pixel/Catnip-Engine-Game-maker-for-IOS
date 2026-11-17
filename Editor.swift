@@ -231,6 +231,7 @@ final class EditorViewController: UIViewController {
     // MARK: Theme
     @objc func applyTheme() {
         let t = Appearance.theme
+        reloadTree()   // tuỳ chọn "Hiện file/thư mục ẩn" có thể vừa đổi
         // Danh sách cú pháp đã nhập có thể vừa đổi (nhập/xoá trong Cài đặt).
         if grammarChosenByUser, let g = customGrammar {
             customGrammar = GrammarStore.shared.grammars.first { $0.grammar.scopeName == g.scopeName }?.grammar

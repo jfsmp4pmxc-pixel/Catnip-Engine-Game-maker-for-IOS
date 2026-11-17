@@ -108,6 +108,7 @@ struct AppSettings: Codable {
     var markdownTheme: String = "auto"  // "auto" (theo giao diện app), "githubLight", "githubDark"
     var tabWidth: Int = 2               // số dấu cách của một mức thụt lề
     var useTabs: Bool = false           // true = thụt lề bằng ký tự Tab
+    var showHiddenFiles: Bool = false   // hiện file/thư mục ẩn (tên bắt đầu bằng dấu chấm) trong cây file
     var spellCheckMarkdown: Bool = true // soát lỗi chính tả tiếng Việt trong file Markdown (tô đỏ)
     var ishSetupDone: Bool = false      // đã qua màn hình cài môi trường Linux lần đầu (cài xong hoặc bỏ qua)
 
@@ -131,6 +132,7 @@ struct AppSettings: Codable {
         markdownTheme   = try c.decodeIfPresent(String.self, forKey: .markdownTheme) ?? "auto"
         tabWidth        = min(max(try c.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 2, 1), 8)
         useTabs         = try c.decodeIfPresent(Bool.self, forKey: .useTabs) ?? false
+        showHiddenFiles = try c.decodeIfPresent(Bool.self, forKey: .showHiddenFiles) ?? false
         spellCheckMarkdown = try c.decodeIfPresent(Bool.self, forKey: .spellCheckMarkdown) ?? true
         ishSetupDone    = try c.decodeIfPresent(Bool.self, forKey: .ishSetupDone) ?? false
     }
@@ -233,25 +235,34 @@ final class ProjectStore {
     // MARK: Validation
 
     /// Chỉ cho phép đường dẫn tương đối, không có ".." hay ký tự cấm, để không thoát khỏi sandbox dự án.
-    static func isValidRelativePath(_ p: String) -> Bool {
+    static func isValidRelativePath(_ p: String, allowHidden: Bool = SettingsStore.shared.settings.showHiddenFiles) -> Bool {
         let parts = p.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
         guard !p.isEmpty, !p.hasPrefix("/") else { return false }
         for part in parts {
             if part.isEmpty || part == "." || part == ".." { return false }
-            if part.hasPrefix(".") { return false }
+            if part.hasPrefix(".") && !allowHidden { return false }
             if part.contains("\\") || part.contains(":") { return false }
         }
         return true
     }
 
     static func isValidProjectName(_ n: String) -> Bool {
-        !n.contains("/") && isValidRelativePath(n) && !CatnipPaths.reservedProjectNames.contains(n)
+        !n.contains("/") && isValidRelativePath(n, allowHidden: false) && !CatnipPaths.reservedProjectNames.contains(n)
     }
 
     // MARK: Projects
 
     func projectURL(_ name: String) -> URL {
         CatnipPaths.projects.appendingPathComponent(name, isDirectory: true)
+    }
+
+    /// Có quét file ẩn (tên bắt đầu bằng dấu chấm) không, theo cài đặt "Hiện file/thư mục ẩn".
+    private var hiddenOptions: FileManager.DirectoryEnumerationOptions {
+        SettingsStore.shared.settings.showHiddenFiles ? [] : [.skipsHiddenFiles]
+    }
+    /// File/thư mục nội bộ không bao giờ hiện trong cây file (siêu dữ liệu của app, .git, rác của macOS).
+    private static func isInternalName(_ n: String) -> Bool {
+        n == ".catnip.json" || n == ".git" || n == ".DS_Store"
     }
 
     func listProjects() -> [String] {
@@ -369,9 +380,10 @@ final class ProjectStore {
             let dir = rel.isEmpty ? projectURL(project) : projectURL(project).appendingPathComponent(rel)
             let items = (try? fm.contentsOfDirectory(at: dir,
                                                      includingPropertiesForKeys: [.isDirectoryKey],
-                                                     options: [.skipsHiddenFiles])) ?? []
+                                                     options: hiddenOptions)) ?? []
             var folders: [String] = [], files: [String] = []
             for u in items {
+                if Self.isInternalName(u.lastPathComponent) { continue }
                 let isDir = (try? u.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
                 if isDir { folders.append(u.lastPathComponent) } else { files.append(u.lastPathComponent) }
             }
@@ -395,11 +407,13 @@ final class ProjectStore {
         let base = projectURL(project)
         guard let en = fm.enumerator(at: base,
                                      includingPropertiesForKeys: [.isDirectoryKey],
-                                     options: [.skipsHiddenFiles]) else { return [] }
+                                     options: hiddenOptions) else { return [] }
         var out: [String] = []
         let basePath = base.standardizedFileURL.path + "/"
         for case let url as URL in en {
-            if (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true { continue }
+            let isDir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            if Self.isInternalName(url.lastPathComponent) { if isDir { en.skipDescendants() }; continue }
+            if isDir { continue }
             let full = url.standardizedFileURL.path
             if full.hasPrefix(basePath) { out.append(String(full.dropFirst(basePath.count))) }
         }
@@ -483,7 +497,7 @@ final class ProjectStore {
         let base = projectURL(project)
         guard let en = fm.enumerator(at: base,
                                      includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isDirectoryKey],
-                                     options: [.skipsHiddenFiles]) else { return 0 }
+                                     options: hiddenOptions) else { return 0 }
         var hasher = Hasher()
         var count = 0
         for case let url as URL in en {
