@@ -318,9 +318,9 @@ final class GitHubViewController: UITableViewController {
                 GitHubLinks.set(GitHubLink(repo: r.fullName, branch: r.defaultBranch ?? "main"), for: self.project)
                 self.link = GitHubLinks.link(for: self.project)
                 self.rebuild()
-                let ac = UIAlertController(title: "Đã tạo \(r.fullName)", message: "Đẩy dự án lên repo mới ngay bây giờ?", preferredStyle: .alert)
+                let ac = UIAlertController(title: "Đã tạo \(r.fullName)", message: "Chọn các file/thư mục để đẩy lên repo mới?", preferredStyle: .alert)
                 ac.addAction(UIAlertAction(title: "Để sau", style: .cancel))
-                ac.addAction(UIAlertAction(title: "Push ngay", style: .default) { _ in self.doPush(message: "Khởi tạo từ Catnip Engine", force: false) })
+                ac.addAction(UIAlertAction(title: "Chọn file để push", style: .default) { _ in self.choosePushItems() })
                 self.present(ac, animated: true)
             } catch {
                 self.setBusy(false)
@@ -337,7 +337,7 @@ final class GitHubViewController: UITableViewController {
             let b = text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !b.isEmpty else { return }
             var nl = GitHubLink(repo: l.repo, branch: b)
-            nl.pushExclude = l.pushExclude
+            nl.pushInclude = l.pushInclude
             GitHubLinks.set(nl, for: self.project)
             self.link = nl
             self.rebuild()
@@ -400,16 +400,15 @@ final class GitHubViewController: UITableViewController {
         let dir = projectDir
         let files = GitHubSync.scanLocal(dir).keys.sorted()
         guard !files.isEmpty else { showError(GHError("Dự án chưa có file nào để push.")); return }
-        let excl = l.pushExclude ?? []
+        let inc = l.pushInclude ?? []
         let sel = PushSelection(files: files,
-                                excluded: Set(files.filter { f in excl.contains { f == $0 || f.hasPrefix($0 + "/") } }))
+                                selected: Set(files.filter { f in inc.contains { f == $0 || f.hasPrefix($0 + "/") } }))
         let vc = GitHubPushItemsViewController(selection: sel, prefix: "") { [weak self] in
             guard let self = self else { return }
-            guard sel.excluded.count < files.count else { self.showError(GHError("Hãy chọn ít nhất một file.")); return }
+            guard !sel.selected.isEmpty else { self.showError(GHError("Chưa chọn file hoặc thư mục nào để push.")); return }
             self.navigationController?.popToViewController(self, animated: true)
             var nl = GitHubLinks.link(for: self.project) ?? l
-            let packed = sel.compressed()
-            nl.pushExclude = packed.isEmpty ? nil : packed
+            nl.pushInclude = sel.compressed()
             GitHubLinks.set(nl, for: self.project)
             self.link = nl
             self.askPush()
@@ -469,7 +468,7 @@ final class GitHubViewController: UITableViewController {
         Task { @MainActor in
             do {
                 let (res, newLink) = try await GitHubSync.push(dir: dir, link: l, message: message, force: force,
-                                                               exclude: l.pushExclude ?? []) { [weak self] text in
+                                                               include: l.pushInclude ?? []) { [weak self] text in
                     DispatchQueue.main.async { self?.status = text; self?.rebuild() }
                 }
                 GitHubLinks.set(newLink, for: self.project)
@@ -518,29 +517,30 @@ final class GitHubViewController: UITableViewController {
 
 // MARK: - Chọn mục để push
 
-/// Trạng thái chọn dùng chung giữa các cấp thư mục: lưu các file KHÔNG push.
+/// Trạng thái chọn dùng chung giữa các cấp thư mục: lưu các file ĐƯỢC push (mặc định không có file nào).
 final class PushSelection {
     let files: [String]
-    var excluded: Set<String>
-    init(files: [String], excluded: Set<String>) { self.files = files; self.excluded = excluded }
+    var selected: Set<String>
+    init(files: [String], selected: Set<String>) { self.files = files; self.selected = selected }
 
     func files(under prefix: String) -> [String] {
         prefix.isEmpty ? files : files.filter { $0.hasPrefix(prefix + "/") }
     }
     /// 0 = không chọn gì, 1 = chọn một phần, 2 = chọn hết.
-    func state(of prefix: String, isDir: Bool) -> Int {
-        let list = isDir ? files(under: prefix) : [prefix]
-        let off = list.filter { excluded.contains($0) }.count
-        return off == 0 ? 2 : (off == list.count ? 0 : 1)
+    func state(of path: String, isDir: Bool) -> Int {
+        let list = isDir ? files(under: path) : [path]
+        let on = list.filter { selected.contains($0) }.count
+        return on == 0 ? 0 : (on == list.count ? 2 : 1)
     }
-    func toggle(_ prefix: String, isDir: Bool) {
-        let list = isDir ? files(under: prefix) : [prefix]
-        if state(of: prefix, isDir: isDir) == 2 { excluded.formUnion(list) } else { excluded.subtract(list) }
+    func toggle(_ path: String, isDir: Bool) {
+        let list = isDir ? files(under: path) : [path]
+        if state(of: path, isDir: isDir) == 2 { selected.subtract(list) } else { selected.formUnion(list) }
     }
-    /// Rút gọn: thư mục bị loại hoàn toàn thì chỉ lưu tên thư mục.
+    /// Rút gọn để lưu: thư mục được chọn đủ thì chỉ lưu tên thư mục (file mới thêm vào đó cũng được push),
+    /// ngược lại lưu từng file. Không bao giờ lưu thư mục gốc của dự án.
     func compressed() -> [String] {
         var dirs = Set<String>()
-        for f in excluded {
+        for f in selected {
             var parts = f.split(separator: "/").map(String.init)
             parts.removeLast()
             var cur = ""
@@ -549,9 +549,9 @@ final class PushSelection {
         var chosen: [String] = []
         for d in dirs.sorted(by: { $0.count < $1.count }) {
             if chosen.contains(where: { d.hasPrefix($0 + "/") }) { continue }
-            if files(under: d).allSatisfy({ excluded.contains($0) }) { chosen.append(d) }
+            if files(under: d).allSatisfy({ selected.contains($0) }) { chosen.append(d) }
         }
-        let rest = excluded.filter { f in !chosen.contains { f.hasPrefix($0 + "/") } }
+        let rest = selected.filter { f in !chosen.contains { f.hasPrefix($0 + "/") } }
         return (chosen + rest).sorted()
     }
 }
@@ -572,9 +572,11 @@ final class GitHubPushItemsViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = prefix.isEmpty ? "Chọn file để push" : (prefix as NSString).lastPathComponent
-        navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Tiếp", style: .done, target: self, action: #selector(done))
-        navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Tất cả/Không", style: .plain, target: self, action: #selector(toggleLevel))
+        title = prefix.isEmpty ? "Chọn để push" : (prefix as NSString).lastPathComponent
+        navigationItem.rightBarButtonItems = [
+            UIBarButtonItem(title: "Tiếp", style: .done, target: self, action: #selector(done)),
+            UIBarButtonItem(title: "Tất cả/Không", style: .plain, target: self, action: #selector(toggleLevel)),
+        ]
         var dirs = Set<String>(), files: [String] = []
         let cut = prefix.isEmpty ? 0 : prefix.count + 1
         for f in selection.files(under: prefix) {
@@ -587,17 +589,17 @@ final class GitHubPushItemsViewController: UITableViewController {
 
     @objc private func done() { onDone() }
 
-    /// Chọn/bỏ chọn mọi file nằm trong thư mục đang xem (vẫn là chọn từng file, không chọn "thư mục").
+    /// Chọn/bỏ chọn mọi file trong thư mục đang xem (ở màn hình đầu thì là mọi file của dự án).
     @objc private func toggleLevel() {
         let list = selection.files(under: prefix)
-        if list.allSatisfy({ !selection.excluded.contains($0) }) { selection.excluded.formUnion(list) }
-        else { selection.excluded.subtract(list) }
+        if list.allSatisfy({ selection.selected.contains($0) }) { selection.selected.subtract(list) }
+        else { selection.selected.formUnion(list) }
         tableView.reloadData()
     }
 
     override func tableView(_ tv: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
     override func tableView(_ tv: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Chỉ chọn được từng file: chạm vào thư mục để mở ra rồi tick các file bên trong. File không tick sẽ không được push. Lựa chọn được nhớ cho lần sau."
+        "Chỉ những file/thư mục được tick mới được push, lên thẳng gốc repo (không kèm tên dự án). Tick một thư mục là push cả thư mục đó; chạm vào tên thư mục để mở ra chọn từng file. Lựa chọn được nhớ cho lần sau."
     }
 
     override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
@@ -605,20 +607,32 @@ final class GitHubPushItemsViewController: UITableViewController {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.textLabel?.text = r.name
         cell.imageView?.image = UIImage(systemName: r.isDir ? "folder" : "doc")
+        let st = selection.state(of: r.path, isDir: r.isDir)
         if r.isDir {
-            // Thư mục chỉ để mở ra, không có ô tick.
             let list = selection.files(under: r.path)
-            let on = list.filter { !selection.excluded.contains($0) }.count
+            let on = list.filter { selection.selected.contains($0) }.count
             cell.detailTextLabel?.text = "\(on)/\(list.count) file được chọn"
             cell.detailTextLabel?.textColor = .secondaryLabel
             cell.accessoryType = .disclosureIndicator
+        }
+        let icon = st == 2 ? "checkmark.circle.fill" : (st == 1 ? "minus.circle.fill" : "circle")
+        let b = UIButton(type: .system)
+        b.setImage(UIImage(systemName: icon), for: .normal)
+        b.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        b.tag = ip.row
+        b.addTarget(self, action: #selector(boxTapped(_:)), for: .touchUpInside)
+        if r.isDir {
+            // Mũi tên mở thư mục + ô tick đặt cạnh nhau.
+            let arrow = UIImageView(image: UIImage(systemName: "chevron.right"))
+            arrow.tintColor = .tertiaryLabel
+            arrow.contentMode = .center
+            arrow.frame = CGRect(x: 44, y: 0, width: 24, height: 44)
+            let box = UIView(frame: CGRect(x: 0, y: 0, width: 68, height: 44))
+            box.addSubview(b)
+            box.addSubview(arrow)
+            cell.accessoryView = box
+            cell.accessoryType = .none
         } else {
-            let on = !selection.excluded.contains(r.path)
-            let b = UIButton(type: .system)
-            b.setImage(UIImage(systemName: on ? "checkmark.circle.fill" : "circle"), for: .normal)
-            b.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
-            b.tag = ip.row
-            b.addTarget(self, action: #selector(boxTapped(_:)), for: .touchUpInside)
             cell.accessoryView = b
         }
         return cell
@@ -626,8 +640,7 @@ final class GitHubPushItemsViewController: UITableViewController {
 
     @objc private func boxTapped(_ b: UIButton) {
         let r = rows[b.tag]
-        guard !r.isDir else { return }
-        selection.toggle(r.path, isDir: false)
+        selection.toggle(r.path, isDir: r.isDir)
         tableView.reloadData()
     }
 

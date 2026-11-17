@@ -320,7 +320,7 @@ struct GitHubLink: Codable {
     var repo: String                    // "owner/name"
     var branch: String
     var synced: [String: String] = [:]  // đường dẫn → SHA blob ở lần đồng bộ gần nhất
-    var pushExclude: [String]? = nil    // file/thư mục (đường dẫn tương đối, ở mọi cấp) KHÔNG push; nil = push tất cả
+    var pushInclude: [String]? = nil    // file/thư mục (đường dẫn tương đối, ở mọi cấp) ĐƯỢC push; nil/rỗng = chưa chọn gì
 }
 
 enum GitHubLinks {
@@ -502,7 +502,7 @@ enum GitHubSync {
 
     // MARK: Push
 
-    static func push(dir: URL, link: GitHubLink, message: String, force: Bool, exclude: [String] = [],
+    static func push(dir: URL, link: GitHubLink, message: String, force: Bool, include: [String] = [],
                      progress: Progress? = nil) async throws -> (PushResult, GitHubLink) {
         let api = GitHubAPI.shared
         progress?("Đang đọc trạng thái trên GitHub…")
@@ -516,8 +516,9 @@ enum GitHubSync {
 
         var link = link
         var synced = link.synced
+        guard !include.isEmpty else { throw GHError("Chưa chọn file hoặc thư mục nào để push.") }
         func inScope(_ path: String) -> Bool {
-            !exclude.contains { path == $0 || path.hasPrefix($0 + "/") }
+            include.contains { path == $0 || path.hasPrefix($0 + "/") }
         }
         let local = scanLocal(dir).filter { inScope($0.key) }
         var datas: [String: Data] = [:]
