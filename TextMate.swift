@@ -71,7 +71,9 @@ final class TMGrammar {
     init?(data: Data, fallbackName: String = "Cú pháp") {
         var obj: Any? = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil)
         if obj == nil { obj = try? JSONSerialization.jsonObject(with: data) }
-        guard let d = obj as? [String: Any], let pats = d["patterns"] as? [[String: Any]] else { return nil }
+        guard let d = obj as? [String: Any],
+              d["patterns"] != nil || d["repository"] != nil || d["scopeName"] != nil else { return nil }
+        let pats = (d["patterns"] as? [[String: Any]]) ?? []
         scopeName = (d["scopeName"] as? String) ?? fallbackName
         name = (d["name"] as? String) ?? fallbackName
         fileTypes = (d["fileTypes"] as? [String]) ?? []
@@ -375,10 +377,14 @@ final class GrammarStore {
         var bundleName: String?
         for u in urls { collect(u, into: &found, bundleName: &bundleName) }
         var added: [String] = []
+        var problems: [String] = []
         try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         for (url, data) in found {
             let base = (url.lastPathComponent as NSString).deletingPathExtension
-            guard let g = TMGrammar(data: data, fallbackName: base) else { continue }
+            guard let g = TMGrammar(data: data, fallbackName: base) else {
+                problems.append("\(url.lastPathComponent): không phải file ngữ pháp TextMate hợp lệ (cần plist/JSON có scopeName hoặc patterns)")
+                continue
+            }
             var safe = g.scopeName
             for bad in ["/", ":", "\\", " "] { safe = safe.replacingOccurrences(of: bad, with: "_") }
             if safe.isEmpty { safe = base }
@@ -387,7 +393,12 @@ final class GrammarStore {
             added.append(g.name)
         }
         guard !added.isEmpty else {
-            throw GHError("Không tìm thấy định cú pháp hợp lệ. Hãy chọn file .tmLanguage hoặc cả thư mục .tmbundle (có Syntaxes/*.tmLanguage).")
+            let names = urls.map { $0.lastPathComponent }.joined(separator: ", ")
+            var msg = found.isEmpty
+                ? "Không thấy file .tmLanguage nào trong: \(names). Hãy chọn file .tmLanguage, hoặc thư mục .tmbundle (hay thư mục Syntaxes) có chứa chúng."
+                : "Không nhập được cú pháp nào."
+            if !problems.isEmpty { msg += "\n\n" + problems.joined(separator: "\n") }
+            throw GHError(msg)
         }
         reload()
         NotificationCenter.default.post(name: .catnipSettingsChanged, object: nil)
@@ -414,8 +425,19 @@ final class GrammarsViewController: UITableViewController, UIDocumentPickerDeleg
     }
 
     @objc private func importTapped() {
-        let picker = UIDocumentPickerViewController(forOpeningContentTypes: [.item, .folder], asCopy: false)
-        picker.allowsMultipleSelection = true
+        let sheet = UIAlertController(title: "Nhập định cú pháp", message: nil, preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Chọn file .tmLanguage…", style: .default) { [weak self] _ in self?.pick(folders: false) })
+        sheet.addAction(UIAlertAction(title: "Chọn thư mục .tmbundle…", style: .default) { [weak self] _ in self?.pick(folders: true) })
+        sheet.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+        sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
+        present(sheet, animated: true)
+    }
+
+    /// Chọn file: mọi loại file (.tmLanguage không có kiểu hệ thống). Chọn thư mục: chỉ thư mục, bấm "Mở" để lấy cả thư mục.
+    /// asCopy: bản sao vào thư mục tạm, khỏi lo quyền truy cập vào bên trong thư mục.
+    private func pick(folders: Bool) {
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: folders ? [.folder] : [.item], asCopy: true)
+        picker.allowsMultipleSelection = !folders
         picker.delegate = self
         present(picker, animated: true)
     }
@@ -438,7 +460,7 @@ final class GrammarsViewController: UITableViewController, UIDocumentPickerDeleg
         max(GrammarStore.shared.grammars.count, 1)
     }
     override func tableView(_ tv: UITableView, titleForFooterInSection section: Int) -> String? {
-        "Nhập file .tmLanguage hoặc cả thư mục .tmbundle (info.plist + Syntaxes/*.tmLanguage). File có đuôi khớp fileTypes của cú pháp sẽ tự dùng cú pháp đó; cũng chọn tay được ở menu ⋯ → Ngôn ngữ tô màu. Vuốt trái để xoá."
+        "Nhập file .tmLanguage, hoặc cả thư mục .tmbundle (info.plist + Syntaxes/*.tmLanguage). File có đuôi khớp fileTypes của cú pháp sẽ tự dùng cú pháp đó; cũng chọn tay được ở menu ⋯ → Ngôn ngữ tô màu. Vuốt trái để xoá."
     }
     override func tableView(_ tv: UITableView, cellForRowAt ip: IndexPath) -> UITableViewCell {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
