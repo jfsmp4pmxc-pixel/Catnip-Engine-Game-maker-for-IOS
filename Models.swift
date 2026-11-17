@@ -434,7 +434,12 @@ enum SyntaxHighlighter {
     /// Tô màu: các token thường trước, rồi chú thích/chuỗi được "bảo vệ" và tô đè cuối cùng.
     /// Quét theo thứ tự trong văn bản (cái nào bắt đầu trước thì thắng): "//" trong chuỗi không thành chú thích,
     /// còn mọi thứ sau dấu chú thích (kể cả chính dấu đó) đều một màu chú thích, bất kể có từ khoá hay không.
-    private static func paint(_ text: String, language: Language, theme: Theme, set: (NSRange, UIColor) -> Void) {
+    private static func paint(_ text: String, language: Language, theme: Theme, grammar: TMGrammar? = nil,
+                              set: (NSRange, UIColor) -> Void) {
+        if let g = grammar {
+            for (r, k) in g.tokens(for: text) { set(r, theme.tokenColor(k)) }
+            return
+        }
         let full = NSRange(location: 0, length: (text as NSString).length)
         let all = rules(for: language)
         for rule in all where rule.kind != .comment && rule.kind != .string {
@@ -460,12 +465,13 @@ enum SyntaxHighlighter {
     static func highlight(_ code: String,
                           language: Language,
                           theme: Theme,
-                          font: UIFont) -> NSAttributedString {
+                          font: UIFont,
+                          grammar: TMGrammar? = nil) -> NSAttributedString {
         let out = NSMutableAttributedString(string: code, attributes: [
             .font: font,
             .foregroundColor: theme.fgColor
         ])
-        paint(code, language: language, theme: theme) { range, color in
+        paint(code, language: language, theme: theme, grammar: grammar) { range, color in
             out.addAttribute(.foregroundColor, value: color, range: range)
         }
         return out
@@ -475,12 +481,13 @@ enum SyntaxHighlighter {
     static func apply(to storage: NSTextStorage,
                       language: Language,
                       theme: Theme,
-                      font: UIFont) {
+                      font: UIFont,
+                      grammar: TMGrammar? = nil) {
         let text = storage.string
         let full = NSRange(location: 0, length: (text as NSString).length)
         storage.beginEditing()
         storage.setAttributes([.font: font, .foregroundColor: theme.fgColor], range: full)
-        paint(text, language: language, theme: theme) { range, color in
+        paint(text, language: language, theme: theme, grammar: grammar) { range, color in
             storage.addAttribute(.foregroundColor, value: color, range: range)
         }
         storage.endEditing()

@@ -37,6 +37,9 @@ final class EditorViewController: UIViewController {
     var canEdit = true
     var isDirty = false
     var language: Language = .plaintext
+    /// Cú pháp TextMate đã nhập (tự chọn theo đuôi file hoặc chọn tay); nil = dùng bộ tô màu có sẵn.
+    var customGrammar: TMGrammar?
+    var grammarChosenByUser = false
     var expanded = Set<String>()
     var entries: [FileEntry] = []
     var spellIssues: [VietnameseSpell.Issue] = []
@@ -228,6 +231,12 @@ final class EditorViewController: UIViewController {
     // MARK: Theme
     @objc func applyTheme() {
         let t = Appearance.theme
+        // Danh sách cú pháp đã nhập có thể vừa đổi (nhập/xoá trong Cài đặt).
+        if grammarChosenByUser, let g = customGrammar {
+            customGrammar = GrammarStore.shared.grammars.first { $0.grammar.scopeName == g.scopeName }?.grammar
+        } else if let p = currentPath, canEdit {
+            customGrammar = GrammarStore.shared.grammar(forFile: p)
+        }
         rebuildLanguageMenu()   // menu ⋯ có mục Shell phụ thuộc cài đặt
         Appearance.style(navigationController)
         view.backgroundColor = t.bg2Color
@@ -270,6 +279,8 @@ final class EditorViewController: UIViewController {
         if store.isTextFile(project: project, path: path), let text = store.read(project: project, path: path) {
             canEdit = true
             language = Language.detect(path)
+            customGrammar = GrammarStore.shared.grammar(forFile: path)
+            grammarChosenByUser = false
             textView.isEditable = true
             textView.text = text
             baselineText = text
@@ -279,6 +290,7 @@ final class EditorViewController: UIViewController {
             baselineDate = nil
             canEdit = false
             language = .plaintext
+            customGrammar = nil
             textView.isEditable = false
             textView.text = "File này không phải văn bản nên không mở để sửa được\n(ảnh, âm thanh, font... vẫn dùng được trong game)."
         }
@@ -302,6 +314,7 @@ final class EditorViewController: UIViewController {
         canEdit = false
         isDirty = false
         language = .plaintext
+        customGrammar = nil
         textView.isEditable = false
         textView.text = ""
         SettingsStore.shared.update { $0.lastFile = nil }
@@ -485,7 +498,8 @@ final class EditorViewController: UIViewController {
         let t = Appearance.theme
         let font = Appearance.codeFont()
         let lang: Language = textView.textStorage.length > 200_000 ? .plaintext : language
-        SyntaxHighlighter.apply(to: textView.textStorage, language: lang, theme: t, font: font)
+        let grammar = textView.textStorage.length > 80_000 ? nil : customGrammar
+        SyntaxHighlighter.apply(to: textView.textStorage, language: lang, theme: t, font: font, grammar: grammar)
         spellIssues = []
         if lang == .markdown, SettingsStore.shared.settings.spellCheckMarkdown, textView.textStorage.length <= 100_000 {
             spellIssues = VietnameseSpell.apply(to: textView.textStorage)
@@ -496,9 +510,11 @@ final class EditorViewController: UIViewController {
     // MARK: Language menu
     func rebuildLanguageMenu() {
         let langs = Language.allCases.map { lang in
-            UIAction(title: lang.displayName, state: lang == language ? .on : .off) { [weak self] _ in
+            UIAction(title: lang.displayName, state: (lang == language && customGrammar == nil) ? .on : .off) { [weak self] _ in
                 guard let self = self else { return }
                 self.language = lang
+                self.customGrammar = nil
+                self.grammarChosenByUser = true
                 self.rebuildLanguageMenu()
                 self.rehighlightNow()
                 self.updateStatus()
@@ -520,9 +536,24 @@ final class EditorViewController: UIViewController {
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
         })
-        top.append(UIMenu(title: "Ngôn ngữ tô màu: \(language.displayName)",
+        var langChildren: [UIMenuElement] = langs
+        let imported = GrammarStore.shared.grammars.map { $0.grammar }
+        if !imported.isEmpty {
+            let acts = imported.map { g in
+                UIAction(title: g.name, state: customGrammar === g ? .on : .off) { [weak self] _ in
+                    guard let self = self else { return }
+                    self.customGrammar = g
+                    self.grammarChosenByUser = true
+                    self.rebuildLanguageMenu()
+                    self.rehighlightNow()
+                    self.updateStatus()
+                }
+            }
+            langChildren.append(UIMenu(title: "Đã nhập (TextMate)", options: .displayInline, children: acts))
+        }
+        top.append(UIMenu(title: "Ngôn ngữ tô màu: \(customGrammar?.name ?? language.displayName)",
                           image: UIImage(systemName: "chevron.left.forwardslash.chevron.right"),
-                          children: langs))
+                          children: langChildren))
         langItem.menu = UIMenu(children: top)
         updateNavItems()
     }
@@ -561,7 +592,7 @@ final class EditorViewController: UIViewController {
         let line = gutter.paragraphIndex(of: loc) + 1
         let lineStart = ns.lineRange(for: NSRange(location: loc, length: 0)).location
         let col = loc - lineStart + 1
-        var summary = "\(language.displayName) · Dòng \(line), Cột \(col) · \(ns.length) ký tự"
+        var summary = "\(customGrammar?.name ?? language.displayName) · Dòng \(line), Cột \(col) · \(ns.length) ký tự"
         if !spellIssues.isEmpty {
             summary += " · ⚠︎ \(spellIssues.count) lỗi chính tả"
             if let hit = spellIssues.first(where: { NSLocationInRange(loc, $0.range) || loc == $0.range.location + $0.range.length }) {

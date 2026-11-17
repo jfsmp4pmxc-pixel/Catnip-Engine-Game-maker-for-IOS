@@ -420,7 +420,7 @@ final class SettingsViewController: UITableViewController {
         case .editing: return 5
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return IshAvailability.isEmbedded ? 3 : 2   // bật shell + cỡ chữ shell (+ cài lại bộ công cụ)
+        case .tools:   return IshAvailability.isEmbedded ? 4 : 3   // bật shell + cỡ chữ shell (+ cài lại bộ công cụ) + định cú pháp
         }
     }
 
@@ -575,6 +575,12 @@ final class SettingsViewController: UITableViewController {
                     SettingsStore.shared.update { $0.terminalFontSize = v }
                     self?.settingsChanged()
                 }
+            } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
+                cell.textLabel?.text = "Định cú pháp (TextMate)…"
+                cell.textLabel?.textColor = t.accentColor
+                cell.imageView?.image = UIImage(systemName: "chevron.left.forwardslash.chevron.right")
+                cell.imageView?.tintColor = t.accentColor
+                cell.accessoryType = .disclosureIndicator
             } else {
                 cell.textLabel?.text = "Cài lại bộ công cụ Linux…"
                 cell.textLabel?.textColor = t.accentColor
@@ -613,6 +619,8 @@ final class SettingsViewController: UITableViewController {
             } else {
                 presentImporter(.font)
             }
+        case .tools where indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1:
+            navigationController?.pushViewController(GrammarsViewController(), animated: true)
         case .tools where indexPath.row == 2:
             presentIshSetup()
         case .markdown where indexPath.row >= 1:
