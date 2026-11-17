@@ -21,7 +21,7 @@ on:
       configuration:
         description: "Build configuration"
         required: true
-        default: "Release"
+        default: "Beta"
         type: choice
         options:
           - Release
@@ -36,7 +36,7 @@ on:
       with_ish:
         description: "Nhúng iSH (shell Linux thật trong cửa sổ shell). Bản đầu: nên chạy workflow 'Build iSH core' trước để kiểm tra"
         required: true
-        default: false
+        default: true
         type: boolean
 
 jobs:
