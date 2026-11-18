@@ -186,7 +186,7 @@ struct FileEntry {
 // MARK: - Project kind
 
 enum ProjectKind: String, Codable, CaseIterable {
-    case love, scratch, python, twoObj, catnip
+    case love, scratch, python, twoObj, catnip, ui
 
     var displayName: String {
         switch self {
@@ -195,6 +195,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .python:  return "Python"
         case .twoObj:  return "2o obj"
         case .catnip:  return "Catnip Engine"
+        case .ui:      return "UI"
         }
     }
 
@@ -202,6 +203,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         switch self {
         case .love:    return "Game 2D dùng LÖVE (Lua), chạy được ngay"
         case .scratch: return "Dự án bình thường, tự do tạo file"
+        case .ui:      return "Giao diện SwiftUI, xem trước tương tác được"
         case .python, .twoObj, .catnip: return "Sắp ra mắt"
         }
     }
@@ -213,13 +215,16 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .python:  return "chevron.left.forwardslash.chevron.right"
         case .twoObj:  return "cube"
         case .catnip:  return "pawprint.fill"
+        case .ui:      return "rectangle.on.rectangle"
         }
     }
 
     /// Chỉ LÖVE và dự án thường dùng được; các loại còn lại là "coming soon".
-    var isAvailable: Bool { self == .love || self == .scratch }
+    var isAvailable: Bool { self == .love || self == .scratch || self == .ui }
     /// Chỉ dự án LÖVE mới có nút Chạy.
     var canRun: Bool { self == .love }
+    /// Dự án UI có nút Preview (thay cho Chạy).
+    var canPreview: Bool { self == .ui }
 }
 
 private struct ProjectMeta: Codable { var kind: ProjectKind }
@@ -291,6 +296,8 @@ final class ProjectStore {
                 try writeTemplate(into: url, title: n)
             case .scratch:
                 try "# \(n)\n".write(to: url.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+            case .ui:
+                try UIPreviewTemplate.contentView.write(to: url.appendingPathComponent("ContentView.swift"), atomically: true, encoding: .utf8)
             case .python, .twoObj, .catnip:
                 break
             }

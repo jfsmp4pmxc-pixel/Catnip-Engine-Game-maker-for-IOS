@@ -45,3 +45,9 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Tuỳ chọn "ngắt dòng" (wrap lines) của editor còn lỗi; chủ dự án bảo bỏ qua.
 - 2o là "Twoo" không phải là "oo".
 - 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
+
+## Loại dự án "UI" (0.5.x, chưa build/kiểm chứng)
+- `ProjectKind.ui`: dự án SwiftUI, nút **Preview** (không có Chạy) ở thanh trên Editor (`uiPreviewTapped`). Mẫu `ContentView.swift` ở `UIPreviewTemplate`.
+- iOS không biên dịch Swift trên máy nên Preview là **trình thông dịch tập con Swift/SwiftUI**: `SwiftUIParser.swift` (lexer+parser), `SwiftUIInterp.swift` (`Interp`, dựng cây `VNode`, `@State` lưu trong `store` theo `Struct.prop`), `UIPreview.swift` (`PVRenderer` vẽ UIKit + `UIPreviewViewController`). Mọi file .swift trong dự án được nạp; gốc là `ContentView` hoặc `#Preview { }`.
+- Hỗ trợ: VStack/HStack/ZStack, Text, Button, TextField, Toggle, Slider, Stepper, Picker (dạng segment), ForEach, List/Form/Section, ScrollView, NavigationView (chỉ tiêu đề), Image(systemName:), Shape, Spacer/Divider, if/for/switch, @State/@Binding/$x, closure, nhiều modifier. Chưa có: generic, protocol, tuple, dictionary, @ObservedObject, animation, điều hướng thật. Modifier lạ bị bỏ qua và hiện ở dòng cuối màn hình.
+- Control giữ lại giữa các lần dựng (cache theo path) để không mất focus/đang kéo.

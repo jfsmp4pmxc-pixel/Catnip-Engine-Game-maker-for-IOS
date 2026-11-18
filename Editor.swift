@@ -63,6 +63,7 @@ final class EditorViewController: UIViewController {
     var saveItem: UIBarButtonItem!
     var previewItem: UIBarButtonItem!
     var runItem: UIBarButtonItem!
+    var uiPreviewItem: UIBarButtonItem!
     var helpItem: UIBarButtonItem!
 
     let sidebar = UIView()
@@ -159,6 +160,7 @@ final class EditorViewController: UIViewController {
                                       style: .plain, target: self, action: #selector(previewTapped))
         runItem = UIBarButtonItem(image: UIImage(systemName: "play.fill"),
                                   style: .plain, target: self, action: #selector(runTapped))
+        uiPreviewItem = UIBarButtonItem(title: "Preview", style: .plain, target: self, action: #selector(uiPreviewTapped))
         helpItem = UIBarButtonItem(image: UIImage(systemName: "questionmark.circle"),
                                    style: .plain, target: self, action: #selector(helpTapped))
         // Menu "⋯": Log, Shell, Build, Cài đặt, Ngôn ngữ tô màu (gom lại cho thanh nút đỡ chật trên iPhone).
@@ -171,6 +173,7 @@ final class EditorViewController: UIViewController {
         guard langItem != nil else { return }
         var items: [UIBarButtonItem] = [langItem, saveItem]
         if kind.canRun { items.append(runItem) }
+        if kind.canPreview { items.append(uiPreviewItem) }
         if language == .markdown { items.append(previewItem) }
         items.append(helpItem)
         navigationItem.rightBarButtonItems = items
@@ -367,6 +370,16 @@ final class EditorViewController: UIViewController {
         flushSave()
         let vc = MarkdownPreviewViewController(project: project, path: path, text: textView.text ?? "")
         vc.onOpenFile = { [weak self] rel in self?.openFile(rel) }
+        let nav = CatnipNavigationController(rootViewController: vc)
+        nav.modalPresentationStyle = .fullScreen
+        present(nav, animated: true)
+    }
+
+    /// Dự án UI: mở Preview tương tác (trình thông dịch SwiftUI trong app).
+    @objc func uiPreviewTapped() {
+        textView.resignFirstResponder()
+        flushSave()
+        let vc = UIPreviewViewController(project: project)
         let nav = CatnipNavigationController(rootViewController: vc)
         nav.modalPresentationStyle = .fullScreen
         present(nav, animated: true)
