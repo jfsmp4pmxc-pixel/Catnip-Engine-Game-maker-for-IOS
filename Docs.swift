@@ -43,7 +43,8 @@ enum DocsCatalog {
         Topic(title: "Cấu hình conf.lua",         file: "docs-13-conf",             symbol: "slider.horizontal.3"),
         Topic(title: "Game mẫu hoàn chỉnh",       file: "docs-14-game-mau",         symbol: "gamecontroller"),
         Topic(title: "Dùng trên iOS và Catnip",   file: "docs-15-ios-catnip",       symbol: "iphone"),
-        Topic(title: "Gỡ lỗi và lỗi thường gặp", file: "docs-16-go-loi",           symbol: "ladybug")
+        Topic(title: "Gỡ lỗi và lỗi thường gặp", file: "docs-16-go-loi",           symbol: "ladybug"),
+        Topic(title: "Dự án UI (SwiftUI)",        file: "docs-17-ui-swiftui",       symbol: "rectangle.on.rectangle")
     ]
 
     static let officialWiki = URL(string: "https://love2d.org/wiki/Main_Page")!
