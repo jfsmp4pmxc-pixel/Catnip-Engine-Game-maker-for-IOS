@@ -382,7 +382,7 @@ enum GitHubSync {
         let root = dir.resolvingSymlinksInPath()
         let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .fileSizeKey]
         guard let en = FileManager.default.enumerator(at: root, includingPropertiesForKeys: keys, options: []) else { return out }
-        let skip = root.pathComponents.count
+        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
         for case let url as URL in en {
             let vals = try? url.resourceValues(forKeys: Set(keys))
             let name = url.lastPathComponent
@@ -393,7 +393,11 @@ enum GitHubSync {
             guard vals?.isRegularFile == true else { continue }
             if name == ".DS_Store" { continue }
             if let s = vals?.fileSize, s > 50_000_000 { continue }
-            let rel = url.pathComponents.dropFirst(skip).joined(separator: "/")
+            // Đường dẫn tương đối so với GỐC DỰ ÁN. Tính bằng so tiền tố chuỗi (có xử lý /var ↔ /private/var):
+            // trước đây đếm số thành phần đường dẫn nên có lúc dư tên thư mục dự án ("Catnip/main.swift").
+            let full = url.resolvingSymlinksInPath().path
+            guard let hit = [full, "/private" + full].first(where: { $0.hasPrefix(rootPath) }) else { continue }
+            let rel = String(hit.dropFirst(rootPath.count))
             if rel == ".catnip.json" || !isSafe(rel) { continue }
             out[rel] = url
         }
