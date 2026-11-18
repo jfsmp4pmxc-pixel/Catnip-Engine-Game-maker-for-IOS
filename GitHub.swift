@@ -358,7 +358,7 @@ enum GitHubLinks {
 // MARK: - Đồng bộ (pull / push)
 
 struct PullResult { var updated = 0; var removed = 0; var kept = 0 }
-struct PushResult { var uploaded = 0; var deleted = 0; var nothing = false }
+struct PushResult { var uploaded = 0; var deleted = 0; var nothing = false; var cancelled = false }
 
 enum GitHubSync {
     typealias Progress = (String) -> Void
@@ -503,6 +503,7 @@ enum GitHubSync {
     // MARK: Push
 
     static func push(dir: URL, link: GitHubLink, message: String, force: Bool, include: [String] = [],
+                     confirm: ((_ upload: [String], _ delete: [String]) async -> Bool)? = nil,
                      progress: Progress? = nil) async throws -> (PushResult, GitHubLink) {
         let api = GitHubAPI.shared
         progress?("Đang đọc trạng thái trên GitHub…")
@@ -520,7 +521,17 @@ enum GitHubSync {
         func inScope(_ path: String) -> Bool {
             include.contains { path == $0 || path.hasPrefix($0 + "/") }
         }
-        let local = scanLocal(dir).filter { inScope($0.key) }
+        // Bước 1: chỉ SAO CHÉP những file/thư mục được chọn sang một thư mục tạm. Mọi thứ push lên đều lấy từ bản sao này,
+        // nên không có đường nào để file ngoài lựa chọn (hay cả thư mục dự án) bị đẩy lên.
+        let fm = FileManager.default
+        let staging = fm.temporaryDirectory.appendingPathComponent("catnip-push-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fm.removeItem(at: staging) }
+        for (p, u) in scanLocal(dir) where inScope(p) {
+            let dst = staging.appendingPathComponent(p)
+            try fm.createDirectory(at: dst.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.copyItem(at: u, to: dst)
+        }
+        let local = scanLocal(staging)
         var datas: [String: Data] = [:]
         var localSHA: [String: String] = [:]
         for (p, u) in local {
@@ -553,6 +564,10 @@ enum GitHubSync {
         if upload.isEmpty && delete.isEmpty {
             link.synced = synced
             return (PushResult(nothing: true), link)
+        }
+
+        if let confirm = confirm, await !confirm(upload.sorted(), delete.sorted()) {
+            return (PushResult(cancelled: true), link)
         }
 
         var entries: [[String: Any]] = []

@@ -468,12 +468,15 @@ final class GitHubViewController: UITableViewController {
         Task { @MainActor in
             do {
                 let (res, newLink) = try await GitHubSync.push(dir: dir, link: l, message: message, force: force,
-                                                               include: l.pushInclude ?? []) { [weak self] text in
+                                                               include: l.pushInclude ?? [],
+                                                               confirm: { [weak self] up, del in await self?.confirmPush(up, del) ?? false }) { [weak self] text in
                     DispatchQueue.main.async { self?.status = text; self?.rebuild() }
                 }
                 GitHubLinks.set(newLink, for: self.project)
                 self.link = newLink
-                if res.nothing {
+                if res.cancelled {
+                    self.setBusy(false, "Đã huỷ push, chưa đẩy gì lên GitHub.")
+                } else if res.nothing {
                     self.setBusy(false, "Không có gì để push: máy và GitHub đã khớp (hoặc GitHub có bản mới hơn, hãy Pull).")
                 } else {
                     self.setBusy(false, "Push xong: \(res.uploaded) file lên, \(res.deleted) file xoá.")
@@ -484,6 +487,23 @@ final class GitHubViewController: UITableViewController {
             } catch {
                 self.setBusy(false)
                 self.showError(error)
+            }
+        }
+    }
+
+    /// Hiện đúng danh sách file sắp được đẩy lên (và file sẽ bị xoá trên GitHub) để người dùng xác nhận.
+    private func confirmPush(_ upload: [String], _ delete: [String]) async -> Bool {
+        await withCheckedContinuation { cont in
+            DispatchQueue.main.async {
+                var lines = upload.prefix(15).map { "＋ " + $0 }
+                if upload.count > 15 { lines.append("… và \(upload.count - 15) file nữa") }
+                lines += delete.prefix(5).map { "－ " + $0 + " (xoá trên GitHub)" }
+                if delete.count > 5 { lines.append("… và \(delete.count - 5) file xoá nữa") }
+                let ac = UIAlertController(title: "Sẽ push \(upload.count) file" + (delete.isEmpty ? "" : ", xoá \(delete.count)"),
+                                           message: lines.joined(separator: "\n"), preferredStyle: .alert)
+                ac.addAction(UIAlertAction(title: "Huỷ", style: .cancel) { _ in cont.resume(returning: false) })
+                ac.addAction(UIAlertAction(title: "Push", style: .default) { _ in cont.resume(returning: true) })
+                self.present(ac, animated: true)
             }
         }
     }
