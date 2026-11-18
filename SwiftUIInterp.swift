@@ -575,25 +575,25 @@ final class Interp {
         case .array(let items): return .array(try items.map { try eval($0, scope) })
         case .closure(let def): return .closure(Closure(def: def, scope: scope))
         case .unary(let op, let x):
-            let v = try derefValue(try eval(x, scope))
+            let v = derefValue(try eval(x, scope))
             if op == "!" { return .bool(!truthy(v)) }
             if case .int(let i) = v { return .int(-i) }
             if case .double(let d) = v { return .double(-d) }
             throw fail("Không đổi dấu được giá trị này")
         case .binary(let op, let a, let b):
-            if op == "&&" { return .bool(truthy(try eval(a, scope)) && truthy(try eval(b, scope))) }
-            if op == "||" { return .bool(truthy(try eval(a, scope)) || truthy(try eval(b, scope))) }
+            if op == "&&" { if !truthy(try eval(a, scope)) { return .bool(false) }; return .bool(truthy(try eval(b, scope))) }
+            if op == "||" { if truthy(try eval(a, scope)) { return .bool(true) }; return .bool(truthy(try eval(b, scope))) }
             if op == "??" {
-                let l = try derefValue(try eval(a, scope))
+                let l = derefValue(try eval(a, scope))
                 if case .null = l { return try eval(b, scope) }
                 return l
             }
-            return try binary(op, try derefValue(try eval(a, scope)), try derefValue(try eval(b, scope)))
+            return try binary(op, derefValue(try eval(a, scope)), derefValue(try eval(b, scope)))
         case .ternary(let c, let a, let b):
             return truthy(try eval(c, scope)) ? try eval(a, scope) : try eval(b, scope)
         case .index(let base, let idx):
-            let b = try derefValue(try eval(base, scope))
-            let i = try derefValue(try eval(idx, scope))
+            let b = derefValue(try eval(base, scope))
+            let i = derefValue(try eval(idx, scope))
             if case .array(let arr) = b, let k = i.asInt {
                 guard k >= 0 && k < arr.count else { throw fail("Chỉ số \(k) ngoài mảng (\(arr.count) phần tử)") }
                 return arr[k]
