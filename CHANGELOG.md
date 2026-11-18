@@ -1,8 +1,8 @@
 # Changelog
 
-## v0.4.10: True workspaces.
+## v0.4.11: True workspaces.
 ### Added:
-- Connect Github.
+- Github conection.
 - more...
 
 ## v0.3.9: Linux!
