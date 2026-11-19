@@ -68,17 +68,18 @@ struct Theme: Codable {
         ]
     )
 
+    /// Màu lấy theo khối mã trong Markdown (hljs-github + github-markdown-light).
     static let light = Theme(
         name: "Light (GitHub)",
-        bg: "#ffffff", bg2: "#f6f8fa", bg3: "#eaeef2",
-        fg: "#24292f", muted: "#6b7280", accent: "#0969da",
-        border: "#d0d7de", hover: "#eaeef2",
+        bg: "#f6f8fa", bg2: "#eaeef2", bg3: "#dde3ea",
+        fg: "#24292e", muted: "#6a737d", accent: "#0969da",
+        border: "#d0d7de", hover: "#e3e8ee",
         tokens: [
-            .comment: "#6e7781", .keyword: "#cf222e", .string: "#0a3069",
-            .number: "#0550ae", .function: "#8250df", .op: "#0550ae",
-            .punct: "#24292f", .tag: "#116329", .attr: "#0550ae",
-            .bool: "#0550ae", .type: "#953800", .decorator: "#953800",
-            .heading: "#0550ae", .doctype: "#6e7781", .color: "#0550ae"
+            .comment: "#6a737d", .keyword: "#d73a49", .string: "#032f62",
+            .number: "#005cc5", .function: "#6f42c1", .op: "#005cc5",
+            .punct: "#24292e", .tag: "#22863a", .attr: "#005cc5",
+            .bool: "#005cc5", .type: "#e36209", .decorator: "#005cc5",
+            .heading: "#005cc5", .doctype: "#6a737d", .color: "#005cc5"
         ]
     )
 
@@ -442,7 +443,10 @@ enum SyntaxHighlighter {
         }
         let full = NSRange(location: 0, length: (text as NSString).length)
         let all = rules(for: language)
-        for rule in all where rule.kind != .comment && rule.kind != .string {
+        // Luật "hàm" (tên đứng trước dấu "(") tô trước: từ khoá như `while (` / `if (` tô sau nên luôn thắng.
+        let plain = all.filter { $0.kind != .comment && $0.kind != .string }
+        let ordered = plain.filter { $0.kind == .function } + plain.filter { $0.kind != .function }
+        for rule in ordered {
             rule.regex.enumerateMatches(in: text, options: [], range: full) { m, _, _ in
                 if let m = m { set(m.range, theme.tokenColor(rule.kind)) }
             }
