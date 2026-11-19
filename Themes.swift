@@ -205,13 +205,50 @@ final class ThemeStore {
         let files = (try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
                                                  options: [.skipsHiddenFiles])) ?? []
         custom = files
-            .filter { $0.pathExtension.lowercased() == "tmtheme" }
+            .filter { ["tmtheme", "json"].contains($0.pathExtension.lowercased()) }
             .sorted { $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent) == .orderedAscending }
-            .compactMap { url in
+            .compactMap { url -> Theme? in
                 guard let data = try? Data(contentsOf: url) else { return nil }
+                let key = "custom:" + url.lastPathComponent
+                if url.pathExtension.lowercased() == "json" {
+                    guard var th = try? JSONDecoder().decode(Theme.self, from: data) else { return nil }
+                    th.key = key
+                    return th
+                }
                 let base = (url.lastPathComponent as NSString).deletingPathExtension
-                return try? TMTheme.parse(data, fallbackName: base, key: "custom:" + url.lastPathComponent)
+                return try? TMTheme.parse(data, fallbackName: base, key: key)
             }
+    }
+
+    /// Lưu theme do trình sửa tạo ra (JSON). `replacing` là khoá của theme JSON đang sửa (ghi đè file đó).
+    @discardableResult
+    func save(_ theme: Theme, replacing: String?) throws -> Theme {
+        var file: String
+        if let r = replacing, r.hasPrefix("custom:"), r.hasSuffix(".json") {
+            file = String(r.dropFirst("custom:".count))
+        } else {
+            var safe = theme.name
+            for bad in ["/", ":", "\\"] { safe = safe.replacingOccurrences(of: bad, with: "_") }
+            safe = safe.trimmingCharacters(in: .whitespaces)
+            if safe.isEmpty { safe = "theme" }
+            file = safe + ".json"
+            var n = 2
+            while fm.fileExists(atPath: directory.appendingPathComponent(file).path) {
+                file = "\(safe) \(n).json"
+                n += 1
+            }
+        }
+        var t = theme
+        t.key = nil
+        do {
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            let enc = JSONEncoder()
+            enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try enc.encode(t).write(to: directory.appendingPathComponent(file), options: .atomic)
+        } catch { throw StoreError.io(error.localizedDescription) }
+        reload()
+        guard let saved = self.theme(forKey: "custom:" + file) else { throw TMThemeError.notATheme }
+        return saved
     }
 
     func theme(forKey key: String) -> Theme? { custom.first { $0.key == key } }

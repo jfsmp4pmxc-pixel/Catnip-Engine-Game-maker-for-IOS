@@ -321,6 +321,8 @@ enum SyntaxHighlighter {
             HighlightRule(kind: .keyword, regex: re("\\b(?:" + keywords + ")\\b")),
             HighlightRule(kind: .bool,    regex: re("\\b(?:" + bools + ")\\b")),
             HighlightRule(kind: .type,    regex: re("\\b(?:" + types + ")\\b|\\b[A-Z][A-Za-z0-9_]*\\b")),
+            // Kiểu nguyên thuỷ trong khai báo (void, int, i32, string...) tô như từ khoá, không như tên kiểu.
+            HighlightRule(kind: .keyword, regex: re("\\b(?:void|int|uint|long|short|byte|sbyte|char|float|double|signed|unsigned|bool|boolean|decimal|string|object|dynamic|wchar_t|size_t|ssize_t|ptrdiff_t|u?int(?:8|16|32|64)_t|u?int(?:8|16|32|64)|float(?:32|64)|complex(?:64|128)|[iu](?:8|16|32|64|128|size)|f(?:32|64)|str|rune|uintptr|num|var|let|Int|UInt|Float|Double|Bool|Character|Void)\\b")),
             HighlightRule(kind: .function,regex: re("\\b[A-Za-z_]\\w*(?=\\s*[(<])")),
             HighlightRule(kind: .op,      regex: re("->|=>|::|[+\\-*/%=<>!&|^~?]+")),
             HighlightRule(kind: .punct,   regex: re("[{}()\\[\\];,.:]"))

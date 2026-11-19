@@ -78,3 +78,16 @@ Mọi file nhị phân không thuộc nhóm trên (`.bin .dat .zip .ttf .so .cla
 - File lớn hơn 8 MB chỉ xem, không sửa; file lớn hơn 64 MB chỉ hiện 64 MB đầu.
 
 Hex editor **ghi đè** byte: chưa hỗ trợ chèn hoặc xoá byte làm thay đổi độ dài file.
+
+## Trình sửa theme
+
+Tạo hoặc chỉnh theme của riêng bạn:
+
+1. **Cài đặt → Giao diện → Trình sửa theme…** (sửa theme đang dùng), hoặc **vuốt trái** một theme trong danh sách rồi bấm **Sửa**.
+2. Theme có sẵn hoặc theme nhập từ `.tmTheme` được **sao chép** thành bản "(sửa)"; theme bạn đã tự tạo được sửa tại chỗ.
+3. Đặt tên, hoặc bấm **Lấy màu từ theme khác…** để lấy màu của một theme làm nền xuất phát.
+4. Chạm từng dòng để chọn màu. Nhóm **Màu giao diện** gồm nền, chữ, màu nhấn, viền; nhóm **Màu cú pháp** gồm từ khoá, hàm, chuỗi, số, chú thích...
+5. Phần xem trước (mã C và HTML) đổi ngay khi bạn chọn màu.
+6. Bấm **Lưu**: theme được dùng luôn và nằm trong danh sách. Vuốt trái để xoá.
+
+Theme tự tạo lưu dưới dạng JSON trong thư mục `Themes` của Catnip.

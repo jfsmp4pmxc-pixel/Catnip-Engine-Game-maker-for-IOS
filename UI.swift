@@ -394,7 +394,7 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
         switch Section(rawValue: section)! {
-        case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để xoá theme đã nhập."
+        case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để sửa hoặc xoá theme."
         case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
         case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật. Soát chính tả tô đỏ tiếng/cụm từ tiếng Việt sai trong file .md (bỏ qua code, link và từ tiếng Anh). \"Hiện file/thư mục ẩn\" cho thấy cả file bắt đầu bằng dấu chấm (như .github, .gitignore) trong cây file; .git và .catnip.json luôn được giấu."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
@@ -414,7 +414,7 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         switch Section(rawValue: section)! {
-        case .theme:   return themes.count + 1          // + "Nhập theme…"
+        case .theme:   return themes.count + 2          // + "Nhập theme…" + "Trình sửa theme…"
         case .font:    return 1 + fonts.count + 1       // mặc định + font đã nhập + "Nhập font…"
         case .size:    return 2                         // bộ chỉnh + dòng xem trước
         case .editing: return 6
@@ -475,6 +475,11 @@ final class SettingsViewController: UITableViewController {
         case .theme:
             if indexPath.row == themes.count {
                 importRow("Nhập theme (.tmTheme)…")
+            } else if indexPath.row == themes.count + 1 {
+                cell.textLabel?.text = "Trình sửa theme (tạo / sửa màu)…"
+                cell.textLabel?.textColor = t.accentColor
+                cell.imageView?.image = UIImage(systemName: "paintpalette")
+                cell.imageView?.tintColor = t.accentColor
             } else {
                 let item = themes[indexPath.row]
                 cell.textLabel?.text = item.name + (item.isCustom ? "  · đã nhập" : "")
@@ -604,6 +609,8 @@ final class SettingsViewController: UITableViewController {
         case .theme:
             if indexPath.row == themes.count {
                 presentImporter(.theme)
+            } else if indexPath.row == themes.count + 1 {
+                presentThemeEditor(Appearance.theme)
             } else {
                 let chosen = themes[indexPath.row]
                 SettingsStore.shared.update { $0.themeName = chosen.id }
@@ -638,6 +645,17 @@ final class SettingsViewController: UITableViewController {
         }
     }
 
+    private func presentThemeEditor(_ theme: Theme) {
+        let ed = ThemeEditorViewController(theme: theme)
+        ed.onSaved = { [weak self] _ in
+            self?.refreshColors()
+            self?.tableView.reloadData()
+            self?.settingsChanged()
+        }
+        let nav = UINavigationController(rootViewController: ed)
+        present(nav, animated: true)
+    }
+
     private func presentImporter(_ kind: ImportKind) {
         importKind = kind
         // .tmTheme không có kiểu hệ thống riêng nên cho chọn mọi file rồi tự kiểm tra nội dung.
@@ -656,9 +674,20 @@ final class SettingsViewController: UITableViewController {
             return UISwipeActionsConfiguration(actions: [a])
         }
         switch Section(rawValue: indexPath.section)! {
+        case .theme where indexPath.row < themes.count && !themes[indexPath.row].isCustom:
+            let target = themes[indexPath.row]
+            let edit = UIContextualAction(style: .normal, title: "Sửa") { [weak self] _, _, done in
+                self?.presentThemeEditor(target); done(true)
+            }
+            edit.backgroundColor = .systemBlue
+            return UISwipeActionsConfiguration(actions: [edit])
         case .theme where indexPath.row < themes.count && themes[indexPath.row].isCustom:
             let target = themes[indexPath.row]
-            return deleteAction { [weak self] in
+            let edit = UIContextualAction(style: .normal, title: "Sửa") { [weak self] _, _, done in
+                self?.presentThemeEditor(target); done(true)
+            }
+            edit.backgroundColor = .systemBlue
+            let del = deleteAction { [weak self] in
                 ThemeStore.shared.delete(target)
                 if SettingsStore.shared.settings.themeName == target.id {
                     SettingsStore.shared.update { $0.themeName = "dark" }
@@ -667,6 +696,7 @@ final class SettingsViewController: UITableViewController {
                 self?.tableView.reloadData()
                 self?.settingsChanged()
             }
+            return UISwipeActionsConfiguration(actions: del.actions + [edit])
         case .font where indexPath.row >= 1 && indexPath.row <= fonts.count:
             let target = fonts[indexPath.row - 1]
             return deleteAction { [weak self] in
