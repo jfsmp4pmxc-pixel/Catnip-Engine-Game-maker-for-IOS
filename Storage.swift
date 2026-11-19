@@ -460,7 +460,8 @@ final class ProjectStore {
         "png","jpg","jpeg","gif","bmp","tga","webp","ico","icns","dds","hdr",
         "wav","mp3","ogg","oga","flac","m4a","aac","mod","xm","it","s3m",
         "ttf","otf","ttc","woff","woff2","fnt",
-        "love","zip","gz","7z","rar","pdf","mp4","mov","avi","bin","dat","so","a","dylib"
+        "love","zip","gz","7z","rar","pdf","mp4","mov","avi","bin","dat","so","a","dylib",
+        "heic","heif","tif","tiff","m4v","3gp","3g2","mkv","webm","wmv","caf","aif","aiff","opus","wma","amr","oga","o","exe","dll","class","jar","wasm"
     ]
 
     /// Có nên mở file này như văn bản không (loại trừ file nhị phân và file quá lớn).

@@ -223,6 +223,7 @@ extension UIColor {
 
 enum Language: String, CaseIterable, Codable {
     case lua, javascript, html, css, json, python, swift, c, cpp, java, csharp, rust, go, shell, markdown, plaintext
+    case asm, fortran, php, ruby, sql, yaml, toml, dart
 
     var displayName: String {
         switch self {
@@ -242,6 +243,14 @@ enum Language: String, CaseIterable, Codable {
         case .shell:      return "Shell"
         case .markdown:   return "Markdown"
         case .plaintext:  return "Plain Text"
+        case .asm:        return "Assembly"
+        case .fortran:    return "Fortran"
+        case .php:        return "PHP"
+        case .ruby:       return "Ruby"
+        case .sql:        return "SQL"
+        case .yaml:       return "YAML"
+        case .toml:       return "TOML / INI"
+        case .dart:       return "Dart"
         }
     }
 
@@ -263,6 +272,16 @@ enum Language: String, CaseIterable, Codable {
         case "go":                               return .go
         case "sh","bash","zsh":                  return .shell
         case "md","markdown":                    return .markdown
+        case "asm","s","nasm","masm","gas":      return .asm
+        case "f","for","f77","f90","f95","f03","f08","ftn","fpp": return .fortran
+        case "php","phtml","php3","php4","php5": return .php
+        case "rb","rake","gemspec","ru":         return .ruby
+        case "sql":                              return .sql
+        case "yml","yaml":                       return .yaml
+        case "toml","ini","cfg","conf","properties","editorconfig": return .toml
+        case "dart":                             return .dart
+        case "pyw","pyi":                        return .python
+        case "jsonc","json5":                    return .json
         default:                                 return .plaintext
         }
     }
@@ -277,13 +296,13 @@ struct HighlightRule {
 
 enum SyntaxHighlighter {
 
-    private static func re(_ pattern: String) -> NSRegularExpression {
+    static func re(_ pattern: String) -> NSRegularExpression {
         return (try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]))
             ?? NSRegularExpression()
     }
 
     /// Bộ luật chung cho các ngôn ngữ họ C (Swift, C, C++, Java, C#, Rust, Go).
-    private static func cLike(keywords: String, bools: String, types: String,
+    static func cLike(keywords: String, bools: String, types: String,
                               preproc: String?, attr: String?, rawStrings: Bool) -> [HighlightRule] {
         var r: [HighlightRule] = [
             HighlightRule(kind: .comment, regex: re("//[^\\n]*|/\\*[\\s\\S]*?\\*/"))
@@ -429,6 +448,8 @@ enum SyntaxHighlighter {
             ]
         case .plaintext:
             return []
+        case .asm, .fortran, .php, .ruby, .sql, .yaml, .toml, .dart:
+            return moreRules(for: language)
         }
     }
 

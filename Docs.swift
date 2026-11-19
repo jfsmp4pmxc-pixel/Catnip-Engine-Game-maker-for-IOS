@@ -49,7 +49,8 @@ enum DocsCatalog {
         Topic(title: "Trạng thái và nhập liệu",   file: "docs-19-trang-thai-nhap-lieu", symbol: "slider.horizontal.3"),
         Topic(title: "Danh sách, điều hướng, tab", file: "docs-20-danh-sach-dieu-huong", symbol: "list.bullet.rectangle"),
         Topic(title: "Swift cho giao diện",       file: "docs-21-swift-cho-giao-dien", symbol: "swift"),
-        Topic(title: "Mẫu phác thảo, tra cứu",    file: "docs-22-mau-phac-thao",    symbol: "doc.text.magnifyingglass")
+        Topic(title: "Mẫu phác thảo, tra cứu",    file: "docs-22-mau-phac-thao",    symbol: "doc.text.magnifyingglass"),
+        Topic(title: "Tô màu cú pháp, trình xem file", file: "docs-23-to-mau-trinh-xem", symbol: "photo.on.rectangle")
     ]
 
     static let officialWiki = URL(string: "https://love2d.org/wiki/Main_Page")!

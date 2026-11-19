@@ -13,7 +13,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Swift/UIKit, `main.swift` là điểm vào (AppDelegate). File chính: `Editor.swift`, `EditorSidebar.swift` (cây file, copy/cut/paste), `UI.swift` (danh sách dự án + Cài đặt), `Storage.swift` (đường dẫn, `AppSettings`, `ProjectStore`), `Models.swift` (Theme, tô màu), `Themes.swift` (.tmTheme), `MarkdownPreview.swift` (WKWebView, offline), `Docs.swift` (tài liệu "?"), `Shell.swift` (shell tích hợp + `presentShell`), `EditorSync.swift` (phát hiện sửa file bên ngoài, menu Build/xuất .zip, nút GitHub), `GitHub.swift`/`GitHubUI.swift` (kết nối GitHub), `TextMate.swift` (định cú pháp .tmLanguage/.tmbundle), `SpellCheck.swift` (soát chính tả tiếng Việt cho .md, không cần từ điển), `IshShell.swift` + `IshBridge.h/.m` (iSH), `GameRun.swift` + `LoveBridge.h/.mm` (LÖVE).
 - Dự án người dùng nằm trong **Documents** (xem được bằng app Tệp). Tên dành riêng: `Inbox`, `iSH`.
 - Cài đặt thêm trường mới vào `AppSettings` (Storage.swift): giải mã chịu lỗi bằng `decodeIfPresent` + giá trị mặc định.
-- Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (22 chương; 17–22 là dự án UI/SwiftUI), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
+- Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (23 chương; 17–22 là dự án UI/SwiftUI, 23 là tô màu + trình xem file), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
 
 ## Đồng bộ với bên ngoài (Tệp/shell)
 - Editor quét chữ ký thư mục dự án mỗi 2 giây (luồng nền) khi đang hiện: làm mới cây file, nạp lại file đang mở nếu chưa sửa; `flushSave` không ghi đè khi file trên đĩa khác `baselineText` mà hỏi người dùng.
@@ -56,3 +56,8 @@ Mục đích (chủ dự án): **phác thảo giao diện** nhanh, bấm thử �
 - Tài liệu: chương 17–22 (`docs-17-ui-swiftui` … `docs-22-mau-phac-thao`). Nếu thêm tính năng phải sửa chương tương ứng.
 - Chưa có / dễ lỗi: generic, async, Combine, `@Observable`, DatePicker, Map, Chart, Canvas, ảnh từ file, animation thật, gesture ngoài `onTapGesture`; `LazyHGrid` chỉ gần đúng; struct dùng chung tham chiếu như class; `@State` trùng giữa các view cùng struct.
 - Thêm file Swift mới phải thêm vào `tools/gen_project_yml.py`.
+
+## Tô màu thêm và trình xem file (chưa build/kiểm chứng)
+- `MoreLanguages.swift`: luật tô cho Assembly, Fortran, PHP, Ruby, SQL, YAML, TOML/INI, Dart (`SyntaxHighlighter.moreRules`, dùng raw string `#"..."#`). `paint()` tô luật hàm trước để từ khoá thắng (`while (`). Light (GitHub) lấy màu từ khối mã Markdown.
+- `MediaViewer.swift`: `MediaKind.detect` theo đuôi; `MediaViewerController` chứa `ImageViewerViewController` (zoom, GIF), `VideoViewerViewController` (AVPlayerViewController), `AudioViewerViewController` (AVPlayer tự vẽ điều khiển), `HexEditorViewController` (ghi đè byte, đi tới, tìm; >8 MB chỉ xem). Editor: `mediaHost` đè lên textView, `showViewer`/`hideViewer`/`openInHex` ("⋯ → Mở bằng hex editor"). File không phải văn bản (hoặc >2 MB) luôn vào trình xem thay cho thông báo cũ.
+- Thêm đuôi nhị phân vào `ProjectStore.binaryExtensions`; thêm ngôn ngữ phải sửa `Language` (displayName, detect, rules) và chương 23.

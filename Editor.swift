@@ -54,6 +54,8 @@ final class EditorViewController: UIViewController {
 
     // MARK: Views
     let textView = UITextView()
+    let mediaHost = UIView()
+    var viewer: MediaViewerController?
     let statusBar = UIView()
     let statusLabel = UILabel()
     let titleLabel = UILabel()
@@ -216,6 +218,9 @@ final class EditorViewController: UIViewController {
         gutter.translatesAutoresizingMaskIntoConstraints = false
         gutter.textView = textView
         view.addSubview(gutter)
+        mediaHost.translatesAutoresizingMaskIntoConstraints = false
+        mediaHost.isHidden = true
+        view.addSubview(mediaHost)
         gutterWidth = gutter.widthAnchor.constraint(equalToConstant: 40)
 
         NSLayoutConstraint.activate([
@@ -223,6 +228,11 @@ final class EditorViewController: UIViewController {
             gutter.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
             gutter.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
             gutterWidth,
+
+            mediaHost.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+            mediaHost.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            mediaHost.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
+            mediaHost.bottomAnchor.constraint(equalTo: statusBar.topAnchor),
 
             textView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             textView.leadingAnchor.constraint(equalTo: gutter.trailingAnchor),
@@ -280,6 +290,7 @@ final class EditorViewController: UIViewController {
     func openFile(_ path: String) {
         flushSave()
         currentPath = path
+        hideViewer()
         if store.isTextFile(project: project, path: path), let text = store.read(project: project, path: path) {
             canEdit = true
             language = Language.detect(path)
@@ -296,7 +307,8 @@ final class EditorViewController: UIViewController {
             language = .plaintext
             customGrammar = nil
             textView.isEditable = false
-            textView.text = "File này không phải văn bản nên không mở để sửa được\n(ảnh, âm thanh, font... vẫn dùng được trong game)."
+            textView.text = ""
+            showViewer(path: path, kind: MediaKind.detect(path))
         }
         isDirty = false
         textView.selectedRange = NSRange(location: 0, length: 0)
@@ -311,7 +323,46 @@ final class EditorViewController: UIViewController {
         fileTable.reloadData()
     }
 
+    /// Hiện trình xem (ảnh/video/âm thanh/hex) đè lên vùng soạn thảo.
+    func showViewer(path: String, kind: MediaKind) {
+        hideViewer()
+        textView.resignFirstResponder()
+        let url = ProjectStore.shared.projectURL(project).appendingPathComponent(path)
+        let vc = MediaViewerController(url: url, kind: kind)
+        addChild(vc)
+        vc.view.translatesAutoresizingMaskIntoConstraints = false
+        mediaHost.addSubview(vc.view)
+        NSLayoutConstraint.activate([
+            vc.view.topAnchor.constraint(equalTo: mediaHost.topAnchor), vc.view.bottomAnchor.constraint(equalTo: mediaHost.bottomAnchor),
+            vc.view.leadingAnchor.constraint(equalTo: mediaHost.leadingAnchor), vc.view.trailingAnchor.constraint(equalTo: mediaHost.trailingAnchor),
+        ])
+        vc.didMove(toParent: self)
+        viewer = vc
+        mediaHost.backgroundColor = Appearance.theme.bgColor
+        mediaHost.isHidden = false
+    }
+
+    func hideViewer() {
+        guard let vc = viewer else { mediaHost.isHidden = true; return }
+        vc.stop()
+        vc.willMove(toParent: nil)
+        vc.view.removeFromSuperview()
+        vc.removeFromParent()
+        viewer = nil
+        mediaHost.isHidden = true
+    }
+
+    /// Mở file hiện tại bằng hex editor (kể cả file văn bản).
+    func openInHex() {
+        guard let p = currentPath else { return }
+        flushSave()
+        canEdit = false
+        showViewer(path: p, kind: .hex)
+        updateStatus()
+    }
+
     func showNoFile() {
+        hideViewer()
         currentPath = nil
         baselineText = nil
         baselineDate = nil
@@ -546,6 +597,11 @@ final class EditorViewController: UIViewController {
                 self?.presentShell()
             })
         }
+        if currentPath != nil {
+            top.append(UIAction(title: "Mở bằng hex editor", image: UIImage(systemName: "number.square")) { [weak self] _ in
+                self?.openInHex()
+            })
+        }
         top.append(makeToolsMenu())
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
@@ -600,6 +656,14 @@ final class EditorViewController: UIViewController {
 
     private func statusSummary() -> String {
         guard currentPath != nil else { return "Chọn hoặc tạo một file ở thanh bên" }
+        if let v = viewer {
+            switch v.kind {
+            case .image: return "Ảnh · \(currentPath ?? "")"
+            case .video: return "Video · \(currentPath ?? "")"
+            case .audio: return "Âm thanh · \(currentPath ?? "")"
+            case .hex:   return "Hex · \(currentPath ?? "")"
+            }
+        }
         let ns = (textView.text ?? "") as NSString
         let loc = min(textView.selectedRange.location, ns.length)
         // Dùng bảng đầu dòng đã cache thay vì quét lại cả file mỗi lần di con trỏ.
