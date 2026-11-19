@@ -13,7 +13,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Swift/UIKit, `main.swift` là điểm vào (AppDelegate). File chính: `Editor.swift`, `EditorSidebar.swift` (cây file, copy/cut/paste), `UI.swift` (danh sách dự án + Cài đặt), `Storage.swift` (đường dẫn, `AppSettings`, `ProjectStore`), `Models.swift` (Theme, tô màu), `Themes.swift` (.tmTheme), `MarkdownPreview.swift` (WKWebView, offline), `Docs.swift` (tài liệu "?"), `Shell.swift` (shell tích hợp + `presentShell`), `EditorSync.swift` (phát hiện sửa file bên ngoài, menu Build/xuất .zip, nút GitHub), `GitHub.swift`/`GitHubUI.swift` (kết nối GitHub), `TextMate.swift` (định cú pháp .tmLanguage/.tmbundle), `SpellCheck.swift` (soát chính tả tiếng Việt cho .md, không cần từ điển), `IshShell.swift` + `IshBridge.h/.m` (iSH), `GameRun.swift` + `LoveBridge.h/.mm` (LÖVE).
 - Dự án người dùng nằm trong **Documents** (xem được bằng app Tệp). Tên dành riêng: `Inbox`, `iSH`.
 - Cài đặt thêm trường mới vào `AppSettings` (Storage.swift): giải mã chịu lỗi bằng `decodeIfPresent` + giá trị mặc định.
-- Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (17 chương, chương 17 là dự án UI), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
+- Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (22 chương; 17–22 là dự án UI/SwiftUI), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
 
 ## Đồng bộ với bên ngoài (Tệp/shell)
 - Editor quét chữ ký thư mục dự án mỗi 2 giây (luồng nền) khi đang hiện: làm mới cây file, nạp lại file đang mở nếu chưa sửa; `flushSave` không ghi đè khi file trên đĩa khác `baselineText` mà hỏi người dùng.
@@ -46,8 +46,13 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - 2o là "Twoo" không phải là "oo".
 - 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
 
-## Loại dự án "UI" (0.5.x, chưa build/kiểm chứng)
-- `ProjectKind.ui`: dự án SwiftUI, nút **Preview** (không có Chạy) ở thanh trên Editor (`uiPreviewTapped`). Mẫu `ContentView.swift` ở `UIPreviewTemplate`.
-- iOS không biên dịch Swift trên máy nên Preview là **trình thông dịch tập con Swift/SwiftUI**: `SwiftUIParser.swift` (lexer+parser), `SwiftUIInterp.swift` (`Interp`, dựng cây `VNode`, `@State` lưu trong `store` theo `Struct.prop`), `UIPreview.swift` (`PVRenderer` vẽ UIKit + `UIPreviewViewController`). Mọi file .swift trong dự án được nạp; gốc là `ContentView` hoặc `#Preview { }`.
-- Hỗ trợ: VStack/HStack/ZStack, Text, Button, TextField, Toggle, Slider, Stepper, Picker (dạng segment), ForEach, List/Form/Section, ScrollView, NavigationView (chỉ tiêu đề), Image(systemName:), Shape, Spacer/Divider, if/for/switch, @State/@Binding/$x, closure, nhiều modifier. Chưa có: generic, protocol, tuple, dictionary, @ObservedObject, animation, điều hướng thật. Modifier lạ bị bỏ qua và hiện ở dòng cuối màn hình.
-- Control giữ lại giữa các lần dựng (cache theo path) để không mất focus/đang kéo.
+## Loại dự án "UI" (0.5.x) — tình hình hiện tại
+Mục đích (chủ dự án): **phác thảo giao diện** nhanh, bấm thử được. Nút **Preview** (không có Chạy) ở thanh trên Editor (`uiPreviewTapped`). Mẫu `ContentView.swift` ở `UIPreviewTemplate`.
+- **Chưa build/kiểm chứng lần nào sau đợt mở rộng.** Lần build gần nhất lỗi `&&`/`||`/`try` đã sửa (857a8ec). Đợt "mở rộng gần đầy đủ SwiftUI" (parser + interp + renderer) và 5 chương tài liệu mới (18–22) viết sau đó, chưa có log. Khi có log: sửa lỗi biên dịch trước, rồi hỏi chủ dự án Preview hiện ra gì.
+- Kiến trúc: iOS không biên dịch Swift trên máy nên Preview là **trình thông dịch tập con Swift/SwiftUI**.
+  - `SwiftUIParser.swift`: lexer + parser (`SwiftLexer`, `SwiftParser`, `Program`). Phục hồi lỗi theo khai báo cấp cao nhất (`Program.errors`, dựa vào `Tok.col == 0`); `extension` gộp bằng `Program.extensions`.
+  - `SwiftUIInterp.swift`: `Interp` (giá trị `V`, `Scope`, `VNode`). `@State` lưu trong `store` theo `Struct.prop`; class (ObservableObject) ghi thuộc tính thì `onChange` dựng lại; `registry` cho `@EnvironmentObject`; `NavigationLink` giữ đích dạng closure (dựng lại mỗi lần). Có tuple, dictionary, enum (raw value, associated value, thuộc tính tính toán, phương thức), init tự viết, static, extension.
+  - `UIPreview.swift`: `PVRenderer` vẽ VNode bằng UIKit (stack tự tính `fillW/fillH`, cache control theo path để giữ focus/kéo), overlay (sheet/alert), điều hướng (`navStack`), `TabView`, `Grid`, gradient, `Menu`, `TextEditor`, `DisclosureGroup`, `Link`; `UIPreviewViewController` tự tải lại khi file .swift đổi (giữ state), giữ bản vẽ cũ nếu lỗi, view lạ thành khung xám.
+- Tài liệu: chương 17–22 (`docs-17-ui-swiftui` … `docs-22-mau-phac-thao`). Nếu thêm tính năng phải sửa chương tương ứng.
+- Chưa có / dễ lỗi: generic, async, Combine, `@Observable`, DatePicker, Map, Chart, Canvas, ảnh từ file, animation thật, gesture ngoài `onTapGesture`; `LazyHGrid` chỉ gần đúng; struct dùng chung tham chiếu như class; `@State` trùng giữa các view cùng struct.
+- Thêm file Swift mới phải thêm vào `tools/gen_project_yml.py`.

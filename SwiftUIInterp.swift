@@ -76,6 +76,8 @@ indirect enum V {
     case obj(Obj)
     case range(Double, Double, Bool, Bool)   // lo, hi, closed, isInt
     case type(String)
+    case tuple([String?], [V])
+    case dict([(V, V)])
 
     var asDouble: Double? {
         switch self {
@@ -99,9 +101,11 @@ final class Scope {
     var vars: [String: V] = [:]
     let parent: Scope?
     var selfObj: Obj?
-    init(parent: Scope?, selfObj: Obj? = nil) {
+    var selfVal: V?
+    init(parent: Scope?, selfObj: Obj? = nil, selfVal: V? = nil) {
         self.parent = parent
         self.selfObj = selfObj ?? parent?.selfObj
+        self.selfVal = selfVal ?? parent?.selfVal
     }
     func lookup(_ n: String) -> V? {
         if let v = vars[n] { return v }
@@ -134,6 +138,10 @@ func describe(_ v: V) -> String {
     case .range(let a, let b, let closed, let isInt):
         return isInt ? "\(Int(a))\(closed ? "..." : "..<")\(Int(b))" : "\(a)\(closed ? "..." : "..<")\(b)"
     case .type(let n): return n
+    case .tuple(let l, let vs):
+        return "(" + zip(l, vs).map { ($0 != nil ? "\($0!): " : "") + describe($1) }.joined(separator: ", ") + ")"
+    case .dict(let ps):
+        return ps.isEmpty ? "[:]" : "[" + ps.map { describe($0.0) + ": " + describe($0.1) }.joined(separator: ", ") + "]"
     }
 }
 
@@ -147,6 +155,9 @@ func valuesEqual(_ a: V, _ b: V) -> Bool {
         return c1 == c2 && (t1 == nil || t2 == nil || t1 == t2)
     case (.array(let x), .array(let y)):
         return x.count == y.count && zip(x, y).allSatisfy { valuesEqual($0, $1) }
+    case (.tuple(_, let x), .tuple(_, let y)):
+        return x.count == y.count && zip(x, y).allSatisfy { valuesEqual($0, $1) }
+    case (.obj(let x), .obj(let y)): return x === y
     default:
         if let x = a.asDouble, let y = b.asDouble { return x == y }
         return false
@@ -252,8 +263,24 @@ final class Interp {
     private var steps = 0
     private var coll: [[VNode]] = []
     private var appeared: Set<String> = []
+    var registry: [String: Obj] = [:]
+    var dismissHandler: (() -> Void)?
+    var animateNext = false
 
-    init(prog: Program) { self.prog = prog }
+    init(prog: Program) {
+        self.prog = prog
+        // Gộp extension vào kiểu gốc.
+        for ext in prog.extensions {
+            if let d = prog.structs[ext.name] {
+                d.props += ext.props
+                d.methods.merge(ext.methods) { $1 }
+                d.conforms += ext.conforms
+            } else if let e = prog.enums[ext.name] {
+                e.members.props += ext.props
+                e.members.methods.merge(ext.methods) { $1 }
+            }
+        }
+    }
 
     func fail(_ m: String) -> RunError { RunError(message: m) }
     func warn(_ m: String) { if !warnings.contains(m) { warnings.append(m) } }
@@ -319,6 +346,7 @@ final class Interp {
         if p.isState { store[fieldKey(obj, name)] = v; return }
         if case .binding(let b)? = obj.fields[name] { b.set(v); return }
         obj.fields[name] = v
+        if obj.def.isClass { onChange?() }
     }
 
     func bindingFor(_ obj: Obj, _ name: String) -> Binding? {
@@ -330,29 +358,54 @@ final class Interp {
 
     func instantiate(_ def: StructDef, _ args: [(String?, V)], _ scope: Scope) throws -> V {
         let obj = Obj(def: def)
-        let stored = def.props.filter { $0.computed == nil }
-        var given: [String: V] = [:]
-        var posIdx = 0
-        for (label, v) in args {
-            if let l = label { given[l] = v }
-            else {
-                guard posIdx < stored.count else { break }
-                given[stored[posIdx].name] = v
-                posIdx += 1
-            }
-        }
+        let stored = def.props.filter { $0.computed == nil && !$0.isStatic }
         let sc = Scope(parent: nil, selfObj: obj)
-        for p in stored {
-            if p.isState {
-                if store[fieldKey(obj, p.name)] == nil {
-                    store[fieldKey(obj, p.name)] = try p.defaultExpr.map { try eval($0, sc) } ?? .null
+        func initDefaults(skipGiven given: [String: V]) throws {
+            for p in stored {
+                if p.attrs.contains("EnvironmentObject") {
+                    if let t = p.typeName, let o = registry[t] { obj.fields[p.name] = .obj(o) }
+                    continue
                 }
-            } else if let g = given[p.name] {
-                obj.fields[p.name] = g
-            } else if let d = p.defaultExpr {
-                obj.fields[p.name] = try eval(d, sc)
+                if p.attrs.contains("Environment") {
+                    if p.name == "dismiss" {
+                        obj.fields[p.name] = .closure(Closure(def: ClosureDef(params: [], body: [.expr(.call(.ident("__dismiss"), [], []))]), scope: Scope(parent: nil)))
+                    }
+                    continue
+                }
+                if p.isState {
+                    if store[fieldKey(obj, p.name)] == nil {
+                        store[fieldKey(obj, p.name)] = try p.defaultExpr.map { try eval($0, sc) } ?? .null
+                    }
+                } else if let g = given[p.name] {
+                    obj.fields[p.name] = g
+                } else if let d = p.defaultExpr {
+                    obj.fields[p.name] = try eval(d, sc)
+                } else if p.typeName.map({ ["String"].contains($0) }) == false && false {
+                    obj.fields[p.name] = .null
+                }
             }
         }
+        if let ini = def.inits.first(where: { i in
+            let labels = Set(args.compactMap { $0.0 })
+            let needed = i.params.filter { $0.defaultExpr == nil }.compactMap { $0.label }
+            return args.count <= i.params.count && Set(needed).isSubset(of: labels)
+        }) {
+            try initDefaults(skipGiven: [:])
+            _ = try callMethod(obj, ini, args)
+        } else {
+            var given: [String: V] = [:]
+            var posIdx = 0
+            for (label, v) in args {
+                if let l = label { given[l] = v }
+                else {
+                    guard posIdx < stored.count else { break }
+                    given[stored[posIdx].name] = v
+                    posIdx += 1
+                }
+            }
+            try initDefaults(skipGiven: given)
+        }
+        if def.isClass { registry[def.name] = obj }
         if def.isView {
             guard let body = def.props.first(where: { $0.name == "body" })?.computed else {
                 throw fail("\(def.name) thiếu `var body: some View { ... }`")
@@ -462,10 +515,12 @@ final class Interp {
             if try evalConds(conds, scope) { return .none }
             let f = try exec(els, Scope(parent: scope))
             return f
-        case .forS(let name, let seq, let body):
+        case .forS(let names, let seq, let body):
             for item in try iterate(try eval(seq, scope)) {
                 let inner = Scope(parent: scope)
-                inner.vars[name] = item
+                if names.count > 1, case .tuple(_, let vs) = item {
+                    for (i, n) in names.enumerated() where i < vs.count { inner.vars[n] = vs[i] }
+                } else { inner.vars[names[0]] = item }
                 let f = try exec(body, inner)
                 switch f {
                 case .brk: return .none
@@ -493,6 +548,21 @@ final class Interp {
             let v = try eval(subj, scope)
             for (pats, body) in cases {
                 for p in pats {
+                    if case .bindPat(let cname, let binds) = p {
+                        var payload: [V] = []
+                        var matched = false
+                        if let cn = cname {
+                            if case .enumCase(_, let c, let args) = v, c == cn { matched = true; payload = args }
+                        } else { matched = true; payload = [v] }
+                        if matched {
+                            let inner = Scope(parent: scope)
+                            for (i, n) in binds.enumerated() where i < payload.count && n != "_" { inner.vars[n] = payload[i] }
+                            let f = try exec(body, inner)
+                            if case .brk = f { return .none }
+                            return f
+                        }
+                        continue
+                    }
                     let pv = try eval(p, scope)
                     var hit = valuesEqual(v, pv)
                     if case .range(let lo, let hi, let closed, _) = pv, let d = v.asDouble { hit = d >= lo && (closed ? d <= hi : d < hi) }
@@ -522,6 +592,7 @@ final class Interp {
             if end - l > 100_000 { throw fail("Khoảng lặp quá lớn") }
             return (l...end).map { .int($0) }
         case .str(let s): return s.map { .str(String($0)) }
+        case .dict(let ps): return ps.map { .tuple([nil, nil], [$0.0, $0.1]) }
         case .binding(let b): return try iterate(b.get())
         default: throw fail("Không lặp được qua giá trị này")
         }
@@ -541,7 +612,16 @@ final class Interp {
             if case .obj(let o) = try eval(base, scope) { try writeField(o, name, v); return }
             throw fail("Không gán được cho .\(name)")
         case .index(let base, let idx):
-            guard case .array(var arr) = try eval(base, scope), let i = try eval(idx, scope).asInt, i >= 0, i < arr.count else {
+            let bv = derefValue(try eval(base, scope))
+            if case .dict(var ps) = bv {
+                let k = try eval(idx, scope)
+                if let i = ps.firstIndex(where: { valuesEqual($0.0, k) }) {
+                    if case .null = v { ps.remove(at: i) } else { ps[i].1 = v }
+                } else if case .null = v {} else { ps.append((k, v)) }
+                try assignTo(base, .dict(ps), scope)
+                return
+            }
+            guard case .array(var arr) = bv, let i = try eval(idx, scope).asInt, i >= 0, i < arr.count else {
                 throw fail("Chỉ số mảng không hợp lệ")
             }
             arr[i] = v
@@ -561,6 +641,13 @@ final class Interp {
         case .bool(let b): return .bool(b)
         case .nilLit: return .null
         case .keyPath: return .null
+        case .tuple(let items):
+            return .tuple(try items.map { $0.0 }, try items.map { try eval($0.1, scope) })
+        case .dict(let pairs):
+            var out: [(V, V)] = []
+            for (k, v) in pairs { out.append((try eval(k, scope), try eval(v, scope))) }
+            return .dict(out)
+        case .bindPat: throw fail("Mẫu let chỉ dùng được trong case của switch")
         case .str(let parts):
             var out = ""
             for p in parts {
@@ -594,6 +681,7 @@ final class Interp {
         case .index(let base, let idx):
             let b = derefValue(try eval(base, scope))
             let i = derefValue(try eval(idx, scope))
+            if case .dict(let ps) = b { return ps.first(where: { valuesEqual($0.0, i) })?.1 ?? .null }
             if case .array(let arr) = b, let k = i.asInt {
                 guard k >= 0 && k < arr.count else { throw fail("Chỉ số \(k) ngoài mảng (\(arr.count) phần tử)") }
                 return arr[k]
@@ -612,7 +700,7 @@ final class Interp {
     }
 
     private func evalIdent(_ n: String, _ scope: Scope) throws -> V {
-        if n == "self", let o = scope.selfObj { return .obj(o) }
+        if n == "self" { if let sv = scope.selfVal { return sv }; if let o = scope.selfObj { return .obj(o) } }
         if n.hasPrefix("$") {
             let name = String(n.dropFirst())
             if scope.lookup(name) != nil {
@@ -632,6 +720,13 @@ final class Interp {
         throw fail("Không tìm thấy tên \"\(n)\"")
     }
 
+    func staticValue(_ p: PropDef, _ def: StructDef) throws -> V {
+        let sc = Scope(parent: nil)
+        if let c = p.computed { return try runBody(c, sc) }
+        if let d = p.defaultExpr { return try eval(d, sc) }
+        return .null
+    }
+
     private func methodClosure(_ o: Obj, _ name: String) -> Closure {
         // Dùng khi truyền hàm làm giá trị (action: doSomething).
         let def = ClosureDef(params: [], body: [.expr(.call(.member(.ident("self"), name), [], []))])
@@ -643,8 +738,14 @@ final class Interp {
             if let en = prog.enums[tn] {
                 if name == "allCases" { return .array(en.cases.map { .enumCase(tn, $0, []) }) }
                 if en.cases.contains(name) { return .enumCase(tn, name, []) }
+                if let p = en.members.props.first(where: { $0.isStatic && $0.name == name }) { return try staticValue(p, en.members) }
                 throw fail("enum \(tn) không có case \(name)")
             }
+            if let sd = prog.structs[tn], let p = sd.props.first(where: { $0.isStatic && $0.name == name }) { return try staticValue(p, sd) }
+            if tn == "Int" && name == "max" { return .int(Int.max) }
+            if tn == "Int" && name == "min" { return .int(Int.min) }
+            if tn == "Double" && name == "pi" { return .double(Double.pi) }
+            if tn == "CGFloat" && name == "infinity" { return .enumCase(nil, "infinity", []) }
             if tn == "Color" {
                 if let c = PVColors.named(name) { return .color(c) }
                 throw fail("Color.\(name) chưa hỗ trợ")
@@ -673,8 +774,28 @@ final class Interp {
             case "isEmpty": return .bool(s.isEmpty)
             default: break
             }
-        case .enumCase(_, let c, _):
+        case .enumCase(let tn, let c, _):
+            if let en = (tn.flatMap { prog.enums[$0] }) ?? prog.enums.values.first(where: { $0.cases.contains(c) }) {
+                if name == "rawValue" {
+                    if let e = en.rawExprs[c] { return try eval(e, Scope(parent: nil)) }
+                    return .str(c)
+                }
+                if let p = en.members.props.first(where: { $0.name == name && !$0.isStatic }), let body = p.computed {
+                    return try runBody(body, Scope(parent: nil, selfVal: b))
+                }
+            }
             if name == "rawValue" { return .str(c) }
+        case .tuple(let labels, let vs):
+            if let i = labels.firstIndex(where: { $0 == name }) { return vs[i] }
+            if let i = Int(name), i < vs.count { return vs[i] }
+        case .dict(let ps):
+            switch name {
+            case "count": return .int(ps.count)
+            case "isEmpty": return .bool(ps.isEmpty)
+            case "keys": return .array(ps.map { $0.0 })
+            case "values": return .array(ps.map { $0.1 })
+            default: break
+            }
         case .double(let d):
             if name == "description" { return .str(describe(.double(d))) }
         case .int(let i):
@@ -700,6 +821,12 @@ final class Interp {
             if let x = a.asDouble, let y = b.asDouble { return .range(x, y, op == "...", false) }
             throw fail("Khoảng không hợp lệ")
         case "+":
+            if case .view(let x) = a, case .view(let y) = b, x.kind == "Text", y.kind == "Text" {
+                let n = VNode("Text")
+                n.args["text"] = .str((x.args["text"].map { describe($0) } ?? "") + (y.args["text"].map { describe($0) } ?? ""))
+                n.mods = x.mods
+                return .view(n)
+            }
             if case .str(let x) = a, case .str(let y) = b { return .str(x + y) }
             if case .array(let x) = a, case .array(let y) = b { return .array(x + y) }
         default: break
@@ -751,7 +878,11 @@ final class Interp {
         if c.def.params.isEmpty {
             for (i, a) in args.enumerated() { sc.vars["$\(i)"] = a }
         } else {
-            for (i, p) in c.def.params.enumerated() where i < args.count { sc.vars[p] = args[i] }
+            if c.def.params.count > 1, args.count == 1, case .tuple(_, let vs) = args[0] {
+                for (i, p) in c.def.params.enumerated() where i < vs.count { sc.vars[p] = vs[i] }
+            } else {
+                for (i, p) in c.def.params.enumerated() where i < args.count { sc.vars[p] = args[i] }
+            }
         }
         return try runBody(c.def.body, sc)
     }
@@ -782,8 +913,8 @@ final class Interp {
         return try runBody(m.body, sc)
     }
 
-    func callFunc(_ f: FuncDef, _ args: [(String?, V)]) throws -> V {
-        let sc = Scope(parent: nil)
+    func callFunc(_ f: FuncDef, _ args: [(String?, V)], selfVal: V? = nil) throws -> V {
+        let sc = Scope(parent: nil, selfVal: selfVal)
         var pos = 0
         for p in f.params {
             if let l = p.label, let hit = args.first(where: { $0.0 == l }) { sc.vars[p.name] = hit.1; continue }
@@ -797,6 +928,22 @@ final class Interp {
     }
 
     private func evalCall(_ callee: Expr, _ args: [Arg], _ trailing: [(String?, ClosureDef)], _ scope: Scope) throws -> V {
+        if case .ident("NavigationLink") = callee, scope.lookup("NavigationLink") == nil {
+            // Đích được giữ dạng closure để dựng lại mỗi lần (phản ứng với state).
+            let n = VNode("NavLink")
+            let titleArg = args.first(where: { $0.label == nil })?.value
+            let destArg = args.first(where: { $0.label == "destination" })?.value
+            if let d = destArg {
+                n.args["dest"] = .closure(Closure(def: ClosureDef(params: [], body: [.expr(d)]), scope: scope))
+                if let t = titleArg { let x = VNode("Text"); x.args["text"] = .str(describe(try eval(t, scope))); n.children = [x] }
+                else if let tr = trailing.first { n.children = try content(.closure(Closure(def: tr.1, scope: scope))) }
+            } else if let tr = trailing.first {
+                n.args["dest"] = .closure(Closure(def: tr.1, scope: scope))
+                if let t = titleArg { let x = VNode("Text"); x.args["text"] = .str(describe(try eval(t, scope))); n.children = [x] }
+                else if trailing.count > 1 { n.children = try content(.closure(Closure(def: trailing[1].1, scope: scope))) }
+            }
+            return .view(n)
+        }
         var a: [(String?, V)] = try args.map { ($0.label, try eval($0.value, scope)) }
         let t: [(String?, V)] = trailing.map { ($0.0, .closure(Closure(def: $0.1, scope: scope))) }
 
@@ -818,6 +965,14 @@ final class Interp {
                     return .enumCase(tn, name, a.map { $0.1 })
                 }
             }
+            if case .ident(let tn) = base, scope.lookup(tn) == nil, let sd = prog.structs[tn], let m = sd.methods[name] { return try callFunc(m, a + t) }
+            if case .ident(let tn) = base, scope.lookup(tn) == nil, let en = prog.enums[tn], let m = en.members.methods[name] { return try callFunc(m, a + t) }
+            if case .ident("Int") = base, name == "random", case .range(let lo, let hi, let closed, _)? = a.first?.1 {
+                let h = closed ? Int(hi) : Int(hi) - 1
+                return .int(Int.random(in: Int(lo)...max(Int(lo), h)))
+            }
+            if case .ident("Double") = base, name == "random", case .range(let lo, let hi, _, _)? = a.first?.1 { return .double(Double.random(in: lo...hi)) }
+            if case .ident("Bool") = base, name == "random" { return .bool(Bool.random()) }
             if case .ident("self") = base, let o = scope.selfObj, let m = o.def.methods[name] { return try callMethod(o, m, a + t) }
             let b = derefValue(try eval(base, scope))
             return try callOn(b, name, &a, t, base, scope)
@@ -877,7 +1032,7 @@ extension Interp {
             case "filter": if let f = f { return .array(try arr.filter { truthy(try callClosure(f, [$0])) }) }
             case "forEach": if let f = f { for x in arr { _ = try callClosure(f, [x]) }; return .null }
             case "sorted":
-                if let f = f { return .array(try arr.sorted { truthy(try callClosure(f, [$0, $1])) }) }
+                if let f = f, t.isEmpty == false || a.first?.0 == "by" { return .array(try arr.sorted { truthy(try callClosure(f, [$0, $1])) }) }
                 return .array(try arr.sorted { truthy(try binary("<", $0, $1)) })
             case "reversed": return .array(arr.reversed())
             case "joined":
@@ -885,6 +1040,31 @@ extension Interp {
                 return .str(arr.map { describe($0) }.joined(separator: sep))
             case "reduce":
                 if let f = f, let initial = a.first?.1 { var acc = initial; for x in arr { acc = try callClosure(f, [acc, x]) }; return acc }
+            case "first":
+                if let f = f { return try arr.first { truthy(try callClosure(f, [$0])) } ?? .null }
+            case "firstIndex":
+                if let f = cl(t.first?.1) { return try arr.firstIndex { truthy(try callClosure(f, [$0])) }.map { .int($0) } ?? .null }
+                if let x = a.first?.1 { return arr.firstIndex { valuesEqual($0, x) }.map { .int($0) } ?? .null }
+            case "allSatisfy": if let f = f { return .bool(try arr.allSatisfy { truthy(try callClosure(f, [$0])) }) }
+            case "compactMap":
+                if let f = f { return .array(try arr.compactMap { x -> V? in let r = try callClosure(f, [x]); if case .null = r { return nil }; return r }) }
+            case "flatMap":
+                if let f = f { return .array(try arr.flatMap { x -> [V] in if case .array(let r) = try callClosure(f, [x]) { return r }; return [] }) }
+            case "prefix": if let n = a.first?.1.asInt { return .array(Array(arr.prefix(max(0, n)))) }
+            case "suffix": if let n = a.first?.1.asInt { return .array(Array(arr.suffix(max(0, n)))) }
+            case "dropFirst": return .array(Array(arr.dropFirst(a.first?.1.asInt ?? 1)))
+            case "dropLast": return .array(Array(arr.dropLast(a.first?.1.asInt ?? 1)))
+            case "shuffled": return .array(arr.shuffled())
+            case "randomElement": return arr.randomElement() ?? .null
+            case "enumerated": return .array(arr.enumerated().map { .tuple(["offset", "element"], [.int($0.offset), $0.element]) })
+            case "removeFirst":
+                guard !arr.isEmpty else { throw fail("removeFirst trên mảng rỗng") }
+                let r = arr.removeFirst(); try assignTo(baseExpr, .array(arr), scope); return r
+            case "sort":
+                if let f = f { arr = try arr.sorted { truthy(try callClosure(f, [$0, $1])) } }
+                else { arr = try arr.sorted { truthy(try binary("<", $0, $1)) } }
+                try assignTo(baseExpr, .array(arr), scope); return .null
+            case "toggle": break
             case "min", "max":
                 guard var best = arr.first else { return .null }
                 for x in arr.dropFirst() where truthy(try binary(name == "min" ? "<" : ">", x, best)) { best = x }
@@ -898,8 +1078,45 @@ extension Interp {
             case "hasPrefix": return .bool(s.hasPrefix(a.first?.1.asString ?? "\u{0}"))
             case "hasSuffix": return .bool(s.hasSuffix(a.first?.1.asString ?? "\u{0}"))
             case "contains": return .bool(s.contains(a.first?.1.asString ?? "\u{0}"))
+            case "split":
+                if let sep = a.first?.1.asString { return .array(s.components(separatedBy: sep).map { .str($0) }) }
+            case "trimmingCharacters": return .str(s.trimmingCharacters(in: .whitespacesAndNewlines))
+            case "capitalized": return .str(s.capitalized)
+            case "prefix": if let n = a.first?.1.asInt { return .str(String(s.prefix(max(0, n)))) }
+            case "suffix": if let n = a.first?.1.asInt { return .str(String(s.suffix(max(0, n)))) }
             case "replacingOccurrences":
                 if a.count >= 2, let x = a[0].1.asString, let y = a[1].1.asString { return .str(s.replacingOccurrences(of: x, with: y)) }
+            default: break
+            }
+        case .enumCase(let tn, let c, _):
+            if let en = (tn.flatMap { prog.enums[$0] }) ?? prog.enums.values.first(where: { $0.cases.contains(c) }), let m = en.members.methods[name] {
+                return try callFunc(m, a + t, selfVal: b)
+            }
+        case .dict(var ps):
+            switch name {
+            case "removeValue":
+                if let k = a.first?.1, let i = ps.firstIndex(where: { valuesEqual($0.0, k) }) {
+                    let r = ps.remove(at: i).1; try assignTo(baseExpr, .dict(ps), scope); return r
+                }
+                return .null
+            case "removeAll": try assignTo(baseExpr, .dict([]), scope); return .null
+            case "updateValue":
+                if a.count >= 2 {
+                    if let i = ps.firstIndex(where: { valuesEqual($0.0, a[1].1) }) { ps[i].1 = a[0].1 } else { ps.append((a[1].1, a[0].1)) }
+                    try assignTo(baseExpr, .dict(ps), scope); return .null
+                }
+            case "map":
+                if let f = cl(t.first?.1) { return .array(try ps.map { try callClosure(f, [.tuple([nil, nil], [$0.0, $0.1])]) }) }
+            case "sorted":
+                return .array(ps.map { .tuple(["key", "value"], [$0.0, $0.1]) })
+            default: break
+            }
+        case .int(let i):
+            if name == "formatted" { return .str(String(i)) }
+        case .double(let d):
+            switch name {
+            case "rounded": return .double(d.rounded())
+            case "formatted": return .str(String(d))
             default: break
             }
         case .type(let tn):
@@ -944,7 +1161,18 @@ extension Interp {
                 if let d = v.asDouble { return .double(d) }
             }
             return .null
-        case "String": return .str(un.first.map { describe(derefValue($0)) } ?? "")
+        case "String":
+            if let f = labeled(a, "format")?.asString {
+                let rest: [CVarArg] = un.map { v -> CVarArg in
+                    switch derefValue(v) {
+                    case .int(let i): return i
+                    case .double(let d): return d
+                    case let x: return describe(x) as NSString
+                    }
+                }
+                return .str(String(format: f, arguments: rest))
+            }
+            return .str(un.first.map { describe(derefValue($0)) } ?? "")
         case "Bool": return .bool(truthy(un.first ?? .null))
         case "min", "max":
             guard un.count >= 2 else { throw fail("\(name) cần 2 giá trị") }
@@ -955,6 +1183,28 @@ extension Interp {
             if let d = un.first?.asDouble { return .double(abs(d)) }
         case "sqrt": if let d = un.first?.asDouble { return .double(sqrt(d)) }
         case "round": if let d = un.first?.asDouble { return .double(d.rounded()) }
+        case "CGFloat", "Float":
+            if let d = un.first?.asDouble { return .double(d) }
+        case "UUID": return .str(UUID().uuidString)
+        case "Date": return .double(Date().timeIntervalSince1970)
+        case "Array":
+            if let r = labeled(a, "repeating"), let n = labeled(a, "count")?.asInt { return .array(Array(repeating: r, count: max(0, n))) }
+            if let v = un.first { return .array(try iterate(derefValue(v))) }
+            return .array([])
+        case "stride":
+            guard let from = labeled(a, "from")?.asDouble, let by = labeled(a, "by")?.asDouble, by != 0 else { break }
+            let isInt: Bool = { if case .int? = labeled(a, "from") { return true }; return false }()
+            var out: [V] = []
+            var x = from
+            if let to = labeled(a, "to")?.asDouble { while by > 0 ? x < to : x > to { out.append(isInt ? .int(Int(x)) : .double(x)); x += by } }
+            else if let thr = labeled(a, "through")?.asDouble { while by > 0 ? x <= thr : x >= thr { out.append(isInt ? .int(Int(x)) : .double(x)); x += by } }
+            return .array(out)
+        case "__dismiss": dismissHandler?(); return .null
+        case "withAnimation":
+            animateNext = true
+            if let c = t.first?.1, case .closure(let cl) = c { _ = try callClosure(cl, []) }
+            else if let c = un.last, case .closure(let cl) = c { _ = try callClosure(cl, []) }
+            return .null
         case "print": printed.append(un.map { describe($0) }.joined(separator: " ")); return .null
         case "Color":
             if let r = labeled(a, "red")?.asDouble, let g = labeled(a, "green")?.asDouble, let b = labeled(a, "blue")?.asDouble {
@@ -965,7 +1215,7 @@ extension Interp {
         // --- Chứa
         case "VStack", "HStack", "ZStack", "LazyVStack", "LazyHStack":
             return try stack(name.replacingOccurrences(of: "Lazy", with: ""), a, t)
-        case "Group", "NavigationView", "NavigationStack", "TabView", "Form", "List":
+        case "Group", "NavigationView", "NavigationStack", "Form", "List":
             let n = VNode(name == "NavigationStack" ? "NavigationView" : name)
             if name == "List" || name == "Form" { n.kind = "List" }
             n.children = try content(t.first?.1)
@@ -983,6 +1233,73 @@ extension Interp {
             if let h = un.first, case .str = h { n.args["header"] = h }
             else if let h = labeled(a, "header"), case .closure = h { n.args["headerNodes"] = h }
             n.children = try content(t.last?.1)
+            return .view(n)
+        case "TabView":
+            let n = VNode("TabView")
+            n.children = try content(t.first?.1)
+            return .view(n)
+        case "GridItem":
+            return .enumCase(nil, "GridItem", un.map { $0 })
+        case "LazyVGrid", "LazyHGrid", "Grid":
+            let n = VNode(name == "Grid" ? "VStack" : "Grid")
+            if name == "Grid" { n.args["spacing"] = labeled(a, "verticalSpacing") ?? .int(8) }
+            var cols = 1
+            if let c = labeled(a, name == "LazyHGrid" ? "rows" : "columns"), case .array(let items) = c {
+                cols = 0
+                for it in items {
+                    if case .enumCase(_, _, let ar) = it, case .enumCase(_, "adaptive", let inner)? = ar.first {
+                        cols += max(1, Int(320 / max(40, inner.first?.asDouble ?? 80)))
+                    } else { cols += 1 }
+                }
+            }
+            n.args["cols"] = .int(max(1, cols))
+            n.args["spacing"] = labeled(a, "spacing") ?? .int(8)
+            n.children = try content(t.first?.1)
+            return .view(n)
+        case "GridRow":
+            let n = VNode("HStack")
+            n.args["spacing"] = .int(8)
+            n.children = try content(t.first?.1)
+            return .view(n)
+        case "Gradient": return .array(un.first.map { [$0] } ?? labeled(a, "colors").map { [$0] } ?? [])
+        case "LinearGradient", "RadialGradient", "AngularGradient":
+            let n = VNode("Gradient")
+            var cols: V = labeled(a, "colors") ?? .array([])
+            if let g = labeled(a, "gradient"), case .array(let inner) = g, let f = inner.first { cols = f }
+            n.args["colors"] = cols
+            n.args["start"] = labeled(a, "startPoint") ?? .enumCase(nil, "top", [])
+            n.args["end"] = labeled(a, "endPoint") ?? .enumCase(nil, "bottom", [])
+            return .view(n)
+        case "Menu":
+            let n = VNode("Menu")
+            if let tt = un.first { n.args["title"] = .str(describe(tt)) }
+            n.children = try content(t.first?.1)
+            return .view(n)
+        case "TextEditor":
+            let n = VNode("TextEditor")
+            n.args["binding"] = labeled(a, "text") ?? .null
+            return .view(n)
+        case "Gauge":
+            let n = VNode("Progress")
+            var v = labeled(a, "value")?.asDouble ?? 0
+            if case .range(let lo, let hi, _, _)? = labeled(a, "in"), hi > lo { v = (v - lo) / (hi - lo) }
+            n.args["value"] = .double(v)
+            n.args["total"] = .double(1)
+            return .view(n)
+        case "DisclosureGroup":
+            let n = VNode("Disclosure")
+            n.args["title"] = .str(un.first.map { describe($0) } ?? "")
+            n.children = try content(t.last?.1)
+            return .view(n)
+        case "Link":
+            let n = VNode("Link")
+            n.args["title"] = .str(un.first.map { describe($0) } ?? "")
+            n.args["url"] = labeled(a, "destination") ?? .str("")
+            return .view(n)
+        case "URL": return .str(labeled(a, "string")?.asString ?? un.first?.asString ?? "")
+        case "ToolbarItem", "ToolbarItemGroup":
+            let n = VNode("Group")
+            n.children = try content(t.first?.1)
             return .view(n)
         case "ForEach":
             guard let data = un.first, let f = t.first?.1 else { throw fail("ForEach cần dữ liệu và closure") }
@@ -1072,6 +1389,14 @@ extension Interp {
             return .view(n)
         default: break
         }
-        throw fail("Chưa hỗ trợ \"\(name)\" trong Preview")
+        // Tên viết hoa không biết (MapView, Chart...): hiện khung xám để vẫn phác thảo được.
+        if let c = name.first, c.isUppercase {
+            let n = VNode("Unknown")
+            n.args["name"] = .str(name)
+            n.children = try t.flatMap { try content($0.1) }
+            warn("\(name) chưa hỗ trợ, hiện khung xám")
+            return .view(n)
+        }
+        throw fail("Không tìm thấy hàm \"\(name)\"")
     }
 }

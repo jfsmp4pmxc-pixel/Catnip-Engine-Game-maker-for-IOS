@@ -59,6 +59,9 @@ indirect enum Expr {
     case ternary(Expr, Expr, Expr)
     case closure(ClosureDef)
     case keyPath
+    case tuple([(String?, Expr)])
+    case dict([(Expr, Expr)])
+    case bindPat(String?, [String])
 }
 
 enum Cond { case expr(Expr); case bind(String, Expr) }
@@ -69,7 +72,7 @@ indirect enum Stmt {
     case assign(String, Expr, Expr)
     case ifS([Cond], [Stmt], [Stmt]?)
     case guardS([Cond], [Stmt])
-    case forS(String, Expr, [Stmt])
+    case forS([String], Expr, [Stmt])
     case whileS(Expr, [Stmt])
     case ret(Expr?)
     case brk
@@ -83,6 +86,9 @@ struct PropDef {
     let defaultExpr: Expr?
     let computed: [Stmt]?
     let returnsView: Bool
+    var attrs: [String] = []
+    var typeName: String? = nil
+    var isStatic = false
 }
 
 struct ParamDef { let label: String?; let name: String; let defaultExpr: Expr? }
@@ -100,6 +106,7 @@ final class StructDef {
     var isClass = false
     var props: [PropDef] = []
     var methods: [String: FuncDef] = [:]
+    var inits: [FuncDef] = []
     init(name: String) { self.name = name }
     var isView: Bool { conforms.contains("View") }
     var isApp: Bool { conforms.contains("App") }
@@ -108,7 +115,10 @@ final class StructDef {
 final class EnumDef {
     let name: String
     var cases: [String] = []
-    init(name: String) { self.name = name }
+    var rawType: String?
+    var rawExprs: [String: Expr] = [:]
+    let members: StructDef
+    init(name: String) { self.name = name; members = StructDef(name: name) }
 }
 
 final class Program {
@@ -118,6 +128,8 @@ final class Program {
     var funcs: [String: FuncDef] = [:]
     var globals: [(String, Expr)] = []
     var previewBody: ClosureDef?
+    var extensions: [StructDef] = []
+    var errors: [SwiftSyntaxError] = []
 }
 
 // MARK: - Từ vựng
@@ -130,6 +142,7 @@ struct Tok {
     var nl: Bool          // có xuống dòng ngay trước token
     var sp: Bool          // có khoảng trắng ngay trước token
     var line: Int
+    var col = 0
 }
 
 enum SwiftLexer {
@@ -138,7 +151,7 @@ enum SwiftLexer {
 
     static func lex(_ src: String) throws -> [Tok] {
         let c = Array(src)
-        var i = 0, line = 1
+        var i = 0, line = 1, lineStart = 0
         var toks: [Tok] = []
         var nl = false, sp = false
         func isIdStart(_ ch: Character) -> Bool { ch.isLetter || ch == "_" }
@@ -146,7 +159,7 @@ enum SwiftLexer {
 
         while i < c.count {
             let ch = c[i]
-            if ch == "\n" { line += 1; nl = true; sp = true; i += 1; continue }
+            if ch == "\n" { line += 1; nl = true; sp = true; i += 1; lineStart = i; continue }
             if ch == " " || ch == "\t" || ch == "\r" { sp = true; i += 1; continue }
             if ch == "/" && i + 1 < c.count && c[i + 1] == "/" {
                 while i < c.count && c[i] != "\n" { i += 1 }
@@ -154,14 +167,15 @@ enum SwiftLexer {
             }
             if ch == "/" && i + 1 < c.count && c[i + 1] == "*" {
                 i += 2
-                while i + 1 < c.count && !(c[i] == "*" && c[i + 1] == "/") { if c[i] == "\n" { line += 1; nl = true }; i += 1 }
+                while i + 1 < c.count && !(c[i] == "*" && c[i + 1] == "/") { if c[i] == "\n" { line += 1; nl = true; lineStart = i + 1 }; i += 1 }
                 i += 2
                 sp = true
                 continue
             }
             let startLine = line
+            let startCol = i - lineStart
             func push(_ kind: Tok.Kind, _ text: String, parts: [(isExpr: Bool, text: String)] = []) {
-                toks.append(Tok(kind: kind, text: text, parts: parts, nl: nl, sp: sp, line: startLine))
+                toks.append(Tok(kind: kind, text: text, parts: parts, nl: nl, sp: sp, line: startLine, col: startCol))
                 nl = false; sp = false
             }
             if isIdStart(ch) || (ch == "$" && i + 1 < c.count && isIdChar(c[i + 1])) {
@@ -296,7 +310,18 @@ final class SwiftParser {
         let prog = Program()
         while cur.kind != .eof {
             if accept(";") { continue }
-            try parseTopLevel(prog)
+            let start = p
+            do { try parseTopLevel(prog) }
+            catch let e as SwiftSyntaxError {
+                prog.errors.append(e)
+                // Phục hồi: nhảy tới khai báo cấp cao nhất kế tiếp (đầu dòng, không thụt lề).
+                p = max(p, start + 1)
+                let starts: Set<String> = ["struct", "class", "enum", "func", "extension", "protocol", "import", "let", "var", "final", "private", "public"]
+                while cur.kind != .eof {
+                    if cur.nl && cur.col == 0 && ((cur.kind == .ident && starts.contains(cur.text)) || isOp("@") || isOp("#")) { break }
+                    next()
+                }
+            }
         }
         return prog
     }
@@ -315,13 +340,16 @@ final class SwiftParser {
                                                  "mutating", "nonmutating", "lazy", "weak", "unowned", "override", "indirect",
                                                  "required", "convenience", "class"]
 
-    private func skipModifiers() {
+    @discardableResult private func skipModifiers() -> Bool {
+        var isStatic = false
         while cur.kind == .ident, SwiftParser.modifiers.contains(cur.text) {
+            if cur.text == "static" { isStatic = true }
             // "class Foo" là khai báo class, không phải bổ từ.
             if cur.text == "class" && peek().kind == .ident && !["func", "var", "let"].contains(peek().text) { break }
             next()
             if isOp("(") && !cur.nl { try? skipBalanced("(", ")") }   // private(set)
         }
+        return isStatic
     }
 
     private func skipBalanced(_ open: String, _ close: String) throws {
@@ -365,7 +393,14 @@ final class SwiftParser {
                 let body = try parseBlockBody()
                 prog.previewBody = ClosureDef(params: [], body: body)
             }
-        } else if isId("extension") || isId("protocol") || isId("typealias") {
+        } else if isId("extension") {
+            next()
+            let ext = StructDef(name: try ident())
+            if accept(":") { repeat { ext.conforms.append(try ident()) } while accept(",") }
+            try expect("{")
+            try parseMembers(ext)
+            prog.extensions.append(ext)
+        } else if isId("protocol") || isId("typealias") {
             // Bỏ qua cả khối.
             while cur.kind != .eof && !isOp("{") && !cur.nl { next() }
             if isOp("{") { try skipBalanced("{", "}") }
@@ -395,100 +430,125 @@ final class SwiftParser {
         return names
     }
 
+    private func skipGenerics() {
+        if isOp("<") {
+            var depth = 0
+            repeat { if isOp("<") { depth += 1 } else if isOp(">") { depth -= 1 }; next() } while depth > 0 && cur.kind != .eof
+        }
+    }
+
     private func parseStruct() throws -> StructDef {
         let isClass = isId("class")
         next()
         let def = StructDef(name: try ident())
         def.isClass = isClass
-        if isOp("<") { // generic: bỏ qua
-            var depth = 0
-            repeat { if isOp("<") { depth += 1 } else if isOp(">") { depth -= 1 }; next() } while depth > 0 && cur.kind != .eof
-        }
+        skipGenerics()
         if accept(":") {
-            repeat { def.conforms.append(try ident()) } while accept(",")
+            repeat { def.conforms.append(try ident()); skipGenerics() } while accept(",")
         }
         try expect("{")
+        try parseMembers(def)
+        return def
+    }
+
+    /// Đọc các thành viên tới dấu "}" (đã nuốt "{") và nuốt luôn "}".
+    private func parseMembers(_ def: StructDef) throws {
         while !isOp("}") {
-            if cur.kind == .eof { throw fail("thiếu \"}\" kết thúc struct \(def.name)") }
+            if cur.kind == .eof { throw fail("thiếu } kết thúc \(def.name)") }
             if accept(";") { continue }
-            let attrs = try skipAttributes()
-            skipModifiers()
-            if isId("var") || isId("let") {
-                next()
-                let name = try ident()
-                let typeNames = try skipType()
-                let returnsView = typeNames.contains("View")
-                let isState = attrs.contains { ["State", "StateObject", "AppStorage", "SceneStorage", "Namespace"].contains($0) }
-                var dflt: Expr?
-                var computed: [Stmt]?
-                if accept("=") {
-                    dflt = try parseExpr()
-                } else if isOp("{") {
-                    next()
-                    // get/set tường minh: chỉ nhận phần get.
-                    if isId("get") && peek().kind == .op && peek().text == "{" {
-                        next(); next()
-                        computed = try parseBlockBody()
-                        while !isOp("}") && cur.kind != .eof { next() }
-                        try expect("}")
-                    } else {
-                        computed = try parseBlockBody()
-                    }
-                }
-                def.props.append(PropDef(name: name, isState: isState, defaultExpr: dflt, computed: computed, returnsView: returnsView))
-            } else if isId("func") {
-                let f = try parseFunc()
-                def.methods[f.0.name] = f.0
-                if f.1 { /* trả về View: gọi sẽ tự gom view */ }
-            } else if isId("init") {
-                next()
-                if isOp("(") { try skipBalanced("(", ")") }
-                if isOp("{") { try skipBalanced("{", "}") }
-            } else if isId("struct") || isId("class") || isId("enum") {
-                // Kiểu lồng nhau: đọc rồi bỏ.
-                if isId("enum") { _ = try parseEnum() } else { _ = try parseStruct() }
-            } else if isId("typealias") {
-                while !cur.nl && cur.kind != .eof { next() }
-            } else {
-                throw fail("chưa hỗ trợ khai báo \"\(cur.text)\" trong struct")
-            }
+            try parseMember(def)
         }
         try expect("}")
-        return def
+    }
+
+    private func parseMember(_ def: StructDef) throws {
+        let attrs = try skipAttributes()
+        let isStatic = skipModifiers()
+        if isId("var") || isId("let") {
+            next()
+            let name = try ident()
+            let typeNames = try skipType()
+            let returnsView = typeNames.contains("View")
+            let isState = attrs.contains { ["State", "StateObject", "AppStorage", "SceneStorage", "Namespace"].contains($0) }
+            var dflt: Expr?
+            var computed: [Stmt]?
+            if accept("=") {
+                dflt = try parseExpr()
+            } else if isOp("{") {
+                next()
+                if isId("get") && peek().kind == .op && peek().text == "{" {
+                    next(); next()
+                    computed = try parseBlockBody()
+                    while !isOp("}") && cur.kind != .eof { next() }
+                    try expect("}")
+                } else {
+                    computed = try parseBlockBody()
+                }
+            }
+            // willSet/didSet sau giá trị mặc định: bỏ qua.
+            if isOp("{") && !cur.nl && dflt != nil { try skipBalanced("{", "}") }
+            var pd = PropDef(name: name, isState: isState, defaultExpr: dflt, computed: computed, returnsView: returnsView)
+            pd.attrs = attrs
+            pd.typeName = typeNames.first(where: { !["some", "Optional"].contains($0) })
+            pd.isStatic = isStatic
+            def.props.append(pd)
+        } else if isId("func") {
+            let f = try parseFunc()
+            def.methods[f.0.name] = f.0
+        } else if isId("init") {
+            def.inits.append(try parseFunc(isInit: true).0)
+        } else if isId("struct") || isId("class") {
+            _ = try parseStruct()
+        } else if isId("enum") {
+            _ = try parseEnum()
+        } else if isId("typealias") {
+            while !cur.nl && cur.kind != .eof { next() }
+        } else if isId("subscript") || isId("deinit") {
+            while !isOp("{") && cur.kind != .eof { next() }
+            try skipBalanced("{", "}")
+        } else {
+            throw fail("chưa hỗ trợ khai báo \"\(cur.text)\" trong \(def.name)")
+        }
     }
 
     private func parseEnum() throws -> EnumDef {
         next()
         let e = EnumDef(name: try ident())
-        if accept(":") { repeat { _ = try ident() } while accept(",") }
+        if accept(":") {
+            repeat {
+                let n = try ident()
+                if ["String", "Int", "Double", "Character"].contains(n) { e.rawType = n }
+                else { e.members.conforms.append(n) }
+            } while accept(",")
+        }
         try expect("{")
+        var nextInt = 0
         while !isOp("}") {
             if cur.kind == .eof { throw fail("thiếu } kết thúc enum") }
-            if acceptId("case") {
-                repeat {
-                    e.cases.append(try ident())
-                    if accept("=") { _ = try parseExpr() }
-                    if isOp("(") { try skipBalanced("(", ")") }
-                } while accept(",")
-            } else if isOp("@") || isId("func") || isId("var") || isId("let") || cur.kind == .ident && SwiftParser.modifiers.contains(cur.text) {
-                // Phương thức/thuộc tính của enum: bỏ qua.
-                var depth = 0
-                repeat {
-                    if isOp("{") { depth += 1 } else if isOp("}") { depth -= 1 }
-                    next()
-                } while (depth > 0 || (!isOp("}") && !isId("case") && !(cur.nl && depth == 0 && (isId("func") || isId("var") || isId("let") || isOp("@") || (cur.kind == .ident && SwiftParser.modifiers.contains(cur.text)))))) && cur.kind != .eof
-            } else {
+            if accept(";") { continue }
+            if isId("case") {
                 next()
+                repeat {
+                    let cn = try ident()
+                    e.cases.append(cn)
+                    if isOp("(") { try skipBalanced("(", ")") }
+                    if accept("=") { e.rawExprs[cn] = try parseExpr() }
+                    else if e.rawType == "Int" { e.rawExprs[cn] = .int(nextInt) }
+                    if case .int(let k)? = e.rawExprs[cn] { nextInt = k + 1 }
+                } while accept(",")
+            } else {
+                try parseMember(e.members)
             }
         }
         try expect("}")
         return e
     }
 
-    private func parseFunc() throws -> (FuncDef, Bool) {
-        next() // func
-        let name = cur.kind == .ident ? next().text : next().text
-        if isOp("<") { var d = 0; repeat { if isOp("<") { d += 1 } else if isOp(">") { d -= 1 }; next() } while d > 0 && cur.kind != .eof }
+    private func parseFunc(isInit: Bool = false) throws -> (FuncDef, Bool) {
+        let name: String
+        if isInit { next(); _ = accept("?"); name = "init" }
+        else { next(); name = next().text }
+        skipGenerics()
         try expect("(")
         var params: [ParamDef] = []
         while !isOp(")") {
@@ -498,6 +558,7 @@ final class SwiftParser {
             if cur.kind == .ident { pname = next().text; label = (a == "_") ? nil : a }
             else if a == "_" { label = nil }
             _ = try skipType()
+            if isOp("...") { next() }
             var dflt: Expr?
             if accept("=") { dflt = try parseExpr() }
             params.append(ParamDef(label: label, name: pname, defaultExpr: dflt))
@@ -505,6 +566,7 @@ final class SwiftParser {
         }
         try expect(")")
         _ = acceptId("throws")
+        _ = acceptId("rethrows")
         var returnsView = false
         if accept("->") {
             var depth = 0
@@ -577,13 +639,17 @@ final class SwiftParser {
                 return .guardS(conds, try parseBlock())
             case "for":
                 next()
-                let name = try ident()
+                var names: [String] = []
+                if accept("(") {
+                    repeat { names.append(try ident()) } while accept(",")
+                    try expect(")")
+                } else { names.append(try ident()) }
                 guard acceptId("in") else { throw fail("for cần \"in\"") }
                 let saved = allowTrailing
                 allowTrailing = false
                 let seq = try parseExpr()
                 allowTrailing = saved
-                return .forS(name, seq, try parseBlock())
+                return .forS(names, seq, try parseBlock())
             case "while":
                 next()
                 let saved = allowTrailing
@@ -637,7 +703,7 @@ final class SwiftParser {
             if cur.kind == .eof { throw fail("thiếu \"}\" của switch") }
             if acceptId("case") {
                 var pats: [Expr] = []
-                repeat { pats.append(try parseExpr()) } while accept(",")
+                repeat { pats.append(try parseCasePattern()) } while accept(",")
                 try expect(":")
                 cases.append((pats, try parseCaseBody()))
             } else if acceptId("default") {
@@ -649,6 +715,28 @@ final class SwiftParser {
         }
         try expect("}")
         return .switchS(subject, cases, dflt)
+    }
+
+    /// Mẫu của case: biểu thức thường, hoặc `.tên(let a, let b)` / `let x`.
+    private func parseCasePattern() throws -> Expr {
+        if isOp(".") && peek().kind == .ident && peek(2).kind == .op && peek(2).text == "(" {
+            let save = p
+            next()
+            let name = try ident()
+            next()
+            var binds: [String] = []
+            var ok = true
+            while !isOp(")") {
+                if isId("let") || isId("var") { next(); binds.append(try ident()) }
+                else if isId("_") { next(); binds.append("_") }
+                else { ok = false; break }
+                if !accept(",") { break }
+            }
+            if ok && accept(")") { return .bindPat(name, binds) }
+            p = save
+        }
+        if isId("let") || isId("var") { next(); return .bindPat(nil, [try ident()]) }
+        return try parseExpr()
     }
 
     private func parseCaseBody() throws -> [Stmt] {
@@ -848,26 +936,37 @@ final class SwiftParser {
                 next()
                 let saved = allowTrailing
                 allowTrailing = true
-                let e = try parseExpr()
-                allowTrailing = saved
-                if isOp(",") { throw fail("tuple chưa được hỗ trợ") }
+                defer { allowTrailing = saved }
+                if accept(")") { return .tuple([]) }
+                var items: [(String?, Expr)] = []
+                var labeled = false
+                repeat {
+                    if isOp(")") { break }
+                    if cur.kind == .ident && peek().kind == .op && peek().text == ":" {
+                        let l = next().text; next(); labeled = true
+                        items.append((l, try parseExpr()))
+                    } else { items.append((nil, try parseExpr())) }
+                } while accept(",")
                 try expect(")")
-                return e
+                if items.count == 1 && !labeled { return items[0].1 }
+                return .tuple(items)
             }
             if tk.text == "[" {
                 next()
-                var items: [Expr] = []
                 let saved = allowTrailing
                 allowTrailing = true
                 defer { allowTrailing = saved }
-                if isOp(":") { throw fail("dictionary chưa được hỗ trợ") }
+                if isOp(":") { next(); try expect("]"); return .dict([]) }
+                var items: [Expr] = []
+                var pairs: [(Expr, Expr)] = []
+                var isDict = false
                 while !isOp("]") {
-                    items.append(try parseExpr())
-                    if isOp(":") { throw fail("dictionary chưa được hỗ trợ") }
+                    let k = try parseExpr()
+                    if accept(":") { isDict = true; pairs.append((k, try parseExpr())) } else { items.append(k) }
                     if !accept(",") { break }
                 }
                 try expect("]")
-                return .array(items)
+                return isDict ? .dict(pairs) : .array(items)
             }
             if tk.text == "{" {
                 return .closure(try parseClosureLiteral())
