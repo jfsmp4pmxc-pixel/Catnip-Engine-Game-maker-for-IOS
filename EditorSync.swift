@@ -25,7 +25,7 @@
 
 import UIKit
 
-private extension UIViewController {
+extension UIViewController {
     /// View controller trên cùng đang hiện (để trình bày hộp thoại cả khi Cài đặt/Docs đang mở).
     var topPresenter: UIViewController {
         var vc = self

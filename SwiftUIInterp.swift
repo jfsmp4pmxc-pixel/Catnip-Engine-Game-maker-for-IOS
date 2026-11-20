@@ -642,7 +642,7 @@ final class Interp {
         case .nilLit: return .null
         case .keyPath: return .null
         case .tuple(let items):
-            return .tuple(try items.map { $0.0 }, try items.map { try eval($0.1, scope) })
+            return .tuple(items.map { $0.0 }, try items.map { try eval($0.1, scope) })
         case .dict(let pairs):
             var out: [(V, V)] = []
             for (k, v) in pairs { out.append((try eval(k, scope), try eval(v, scope))) }
