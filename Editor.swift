@@ -626,6 +626,9 @@ final class EditorViewController: UIViewController {
                 self?.openInHex()
             })
         }
+        top.append(UIAction(title: "Chat AI (Claude, DeepSeek)", image: UIImage(systemName: "bubble.left.and.bubble.right")) { [weak self] _ in
+            self?.presentAIChat()
+        })
         top.append(makeToolsMenu())
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
