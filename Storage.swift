@@ -99,7 +99,8 @@ struct AppSettings: Codable {
     var lastFile: String?
     var expandedFolders: [String] = []
     var showLineNumbers: Bool = true
-    var wrapLines: Bool = false      // false = không ngắt dòng (cuộn ngang)
+    var wrapLines: Bool = false      // (cũ, không còn dùng: editor luôn ngắt dòng mềm)
+    var indentWrapped: Bool = true   // thụt lề các dòng bị ngắt theo khoảng trắng đầu dòng; tắt = dòng tiếp theo ở cột 0
     var lockPortrait: Bool = false   // true = luôn giữ chiều dọc (cả màn hình lẫn bàn phím)
     var fontName: String?            // PostScript name của font editor; nil = font hệ thống
     var shellEnabled: Bool = false   // bật cửa sổ shell (thư mục gốc là Documents)
@@ -124,6 +125,7 @@ struct AppSettings: Codable {
         expandedFolders = try c.decodeIfPresent([String].self, forKey: .expandedFolders) ?? []
         showLineNumbers = try c.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? true
         wrapLines       = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? false
+        indentWrapped   = try c.decodeIfPresent(Bool.self, forKey: .indentWrapped) ?? true
         lockPortrait    = try c.decodeIfPresent(Bool.self, forKey: .lockPortrait) ?? false
         fontName        = try c.decodeIfPresent(String.self, forKey: .fontName)
         shellEnabled    = try c.decodeIfPresent(Bool.self, forKey: .shellEnabled) ?? false

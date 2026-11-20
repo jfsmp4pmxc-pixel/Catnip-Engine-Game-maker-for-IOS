@@ -77,7 +77,7 @@ final class DocsViewController: UITableViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Tài liệu LÖVE"
+        title = "Hướng dẫn"
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")

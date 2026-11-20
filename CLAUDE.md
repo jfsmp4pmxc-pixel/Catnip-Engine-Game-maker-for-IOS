@@ -13,7 +13,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Swift/UIKit, `main.swift` là điểm vào (AppDelegate). File chính: `Editor.swift`, `EditorSidebar.swift` (cây file, copy/cut/paste), `UI.swift` (danh sách dự án + Cài đặt), `Storage.swift` (đường dẫn, `AppSettings`, `ProjectStore`), `Models.swift` (Theme, tô màu), `Themes.swift` (.tmTheme), `MarkdownPreview.swift` (WKWebView, offline), `Docs.swift` (tài liệu "?"), `Shell.swift` (shell tích hợp + `presentShell`), `EditorSync.swift` (phát hiện sửa file bên ngoài, menu Build/xuất .zip, nút GitHub), `GitHub.swift`/`GitHubUI.swift` (kết nối GitHub), `TextMate.swift` (định cú pháp .tmLanguage/.tmbundle), `SpellCheck.swift` (soát chính tả tiếng Việt cho .md, không cần từ điển), `IshShell.swift` + `IshBridge.h/.m` (iSH), `GameRun.swift` + `LoveBridge.h/.mm` (LÖVE).
 - Dự án người dùng nằm trong **Documents** (xem được bằng app Tệp). Tên dành riêng: `Inbox`, `iSH`.
 - Cài đặt thêm trường mới vào `AppSettings` (Storage.swift): giải mã chịu lỗi bằng `decodeIfPresent` + giá trị mặc định.
-- Tài liệu LÖVE tiếng Việt: `Resources/Docs/docs-NN-*.md` (23 chương; 17–22 là dự án UI/SwiftUI, 23 là tô màu + trình xem file), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
+- Hướng dẫn (trước là "Tài liệu LÖVE") tiếng Việt: `Resources/Docs/docs-NN-*.md` (23 chương; 17–22 là dự án UI/SwiftUI, 23 là tô màu + trình xem file), danh sách ở `DocsCatalog.topics` trong Docs.swift. Ví dụ Lua được kiểm cú pháp bằng LuaJIT; tên hàm kiểm theo mã nguồn LÖVE 12.
 
 ## Đồng bộ với bên ngoài (Tệp/shell)
 - Editor quét chữ ký thư mục dự án mỗi 2 giây (luồng nền) khi đang hiện: làm mới cây file, nạp lại file đang mở nếu chưa sửa; `flushSave` không ghi đè khi file trên đĩa khác `baselineText` mà hỏi người dùng.
@@ -42,7 +42,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Lõi iSH dùng `__thread current`: chỉ mkdir/mount/ghi file guest khi `current` hợp lệ (lúc boot hoặc ngay sau `become_new_init_child`).
 - Mã thoát từ kernel iSH là `status << 8`.
 - Lua 5.1/LuaJIT: không có `string.rep` với separator, không có `+=`, `!=`.
-- Tuỳ chọn "ngắt dòng" (wrap lines) của editor còn lỗi; chủ dự án bảo bỏ qua.
+- Editor luôn ngắt dòng mềm. Cài đặt "Thụt lề các dòng bị ngắt" (`indentWrapped`, mặc định bật) → `applyWrapIndent` trong `rehighlightNow` đặt `headIndent` theo khoảng trắng đầu dòng; tắt thì dòng bị ngắt ở cột 0 (như GitHub/Textastic). `wrapLines` là trường cũ, không dùng. Chưa build/kiểm chứng.
 - 2o là "Twoo" không phải là "oo".
 - 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
 
