@@ -525,8 +525,8 @@ final class SettingsViewController: UITableViewController {
                     self?.settingsChanged()
                 }
             } else if indexPath.row == 1 {
-                switchCell(cell, text: "Thụt lề các dòng bị ngắt", isOn: st.indentWrapped) { [weak self] on in
-                    SettingsStore.shared.update { $0.indentWrapped = on }
+                switchCell(cell, text: "Cuộn ngang (không ngắt dòng)", isOn: st.scrollHorizontal) { [weak self] on in
+                    SettingsStore.shared.update { $0.scrollHorizontal = on }
                     self?.settingsChanged()
                 }
             } else if indexPath.row == 2 {

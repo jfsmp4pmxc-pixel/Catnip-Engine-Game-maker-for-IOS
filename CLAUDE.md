@@ -42,7 +42,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Lõi iSH dùng `__thread current`: chỉ mkdir/mount/ghi file guest khi `current` hợp lệ (lúc boot hoặc ngay sau `become_new_init_child`).
 - Mã thoát từ kernel iSH là `status << 8`.
 - Lua 5.1/LuaJIT: không có `string.rep` với separator, không có `+=`, `!=`.
-- Editor luôn ngắt dòng mềm. Cài đặt "Thụt lề các dòng bị ngắt" (`indentWrapped`, mặc định bật) → `applyWrapIndent` trong `rehighlightNow` đặt `headIndent` theo khoảng trắng đầu dòng; tắt thì dòng bị ngắt ở cột 0 (như GitHub/Textastic). `wrapLines` là trường cũ, không dùng. Chưa build/kiểm chứng.
+- Cài đặt "Cuộn ngang" (`scrollHorizontal`, mặc định tắt = ngắt dòng mềm): bật thì không ngắt dòng, textView cuộn ngang (container 10 000 pt, `.byClipping`). `wrapLines`/`indentWrapped` là trường cũ, không dùng. Chưa build/kiểm chứng. Đã từng làm Chat AI (Claude/DeepSeek) rồi huỷ theo yêu cầu.
 - 2o là "Twoo" không phải là "oo".
 - 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
 
@@ -63,7 +63,3 @@ Mục đích (chủ dự án): **phác thảo giao diện** nhanh, bấm thử �
 - Thêm đuôi nhị phân vào `ProjectStore.binaryExtensions`; thêm ngôn ngữ phải sửa `Language` (displayName, detect, rules) và chương 23.
 - Theme editor (`ThemeEditor.swift`): Cài đặt → Giao diện → "Trình sửa theme…" hoặc vuốt trái một theme → "Sửa". Màu bằng `UIColorPickerViewController`, xem trước C + HTML, lưu JSON ở `Application Support/Catnip/Themes/*.json` (`ThemeStore.save`, `reload` đọc cả `.tmTheme` lẫn `.json`). Theme có sẵn/tmTheme khi sửa sẽ thành bản sao "(sửa)".
 - cLike: kiểu nguyên thuỷ (`void`, `int`, `i32`, `string`...) tô như từ khoá (rule `.keyword` đặt sau rule `.type`).
-
-## Chat AI (chưa build/kiểm chứng)
-- `AIChat.swift`: Claude (api.anthropic.com/v1/messages) và DeepSeek (api.deepseek.com/chat/completions) bằng **API key** (không đăng nhập tài khoản claude.ai được), key trong Keychain (`AIKeyStore`, có file dự phòng). `AIClient.send` không stream. Đoạn chat lưu ở `Application Support/Catnip/Chats/<id>.json` (`ChatStore`), xuất .md + .json, nhập .json. `ChatSegment.parse` tách khối mã ``` → `ChatCell` vẽ khối mã có tô màu + nút "Sao chép"; nhấn giữ tin nhắn để chép cả tin.
-- Vào từ Editor: "⋯ → Chat AI (Claude, DeepSeek)" → `AIChatListViewController` (✎ tạo, biểu tượng người = nhập key, nút nhập). Trong chat: menu chọn nhà cung cấp/mô hình, "Đính kèm file đang mở".

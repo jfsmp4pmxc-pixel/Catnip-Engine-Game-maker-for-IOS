@@ -497,7 +497,7 @@ final class EditorViewController: UIViewController {
     // MARK: Số dòng + xuống dòng (theo settings)
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        applyWrapWidth()
+        if !SettingsStore.shared.settings.scrollHorizontal { applyWrapWidth() }
         gutter.setNeedsDisplay()
     }
 
@@ -512,12 +512,16 @@ final class EditorViewController: UIViewController {
         let st = SettingsStore.shared.settings
         let t = Appearance.theme
         let tc = textView.textContainer
-        // Luôn ngắt dòng mềm; tuỳ chọn "Thụt lề các dòng bị ngắt" chỉ quyết định có thụt lề phần dòng tiếp theo hay không.
-        tc.widthTracksTextView = true
-        tc.lineBreakMode = .byCharWrapping
-        applyWrapWidth()
-        textView.alwaysBounceHorizontal = false
-        rehighlightNow()
+        if st.scrollHorizontal {
+            tc.widthTracksTextView = false
+            tc.lineBreakMode = .byClipping
+            tc.size = CGSize(width: 10_000, height: CGFloat.greatestFiniteMagnitude)
+        } else {
+            tc.widthTracksTextView = true
+            tc.lineBreakMode = .byCharWrapping
+            applyWrapWidth()
+        }
+        textView.alwaysBounceHorizontal = st.scrollHorizontal
 
         gutter.isHidden = !st.showLineNumbers
         gutter.font = Appearance.codeFont(max(Appearance.fontSize - 2, 2))
@@ -564,36 +568,7 @@ final class EditorViewController: UIViewController {
         if lang == .markdown, SettingsStore.shared.settings.spellCheckMarkdown, textView.textStorage.length <= 100_000 {
             spellIssues = VietnameseSpell.apply(to: textView.textStorage)
         }
-        applyWrapIndent(font: font)
         textView.typingAttributes = [.font: font, .foregroundColor: t.fgColor]
-    }
-
-    /// Thụt lề treo: dòng bị ngắt (xuống dòng mềm) thụt bằng khoảng trắng đầu dòng. Tắt thì dòng tiếp theo bắt đầu ở cột 0.
-    private func applyWrapIndent(font: UIFont) {
-        let storage = textView.textStorage
-        let ns = storage.string as NSString
-        let full = NSRange(location: 0, length: ns.length)
-        guard ns.length <= 200_000 else { return }
-        let st = SettingsStore.shared.settings
-        storage.beginEditing()
-        if !st.indentWrapped {
-            storage.removeAttribute(.paragraphStyle, range: full)
-        } else {
-            let spaceW = (" " as NSString).size(withAttributes: [.font: font]).width
-            ns.enumerateSubstrings(in: full, options: [.byParagraphs, .substringNotRequired]) { _, range, enclosing, _ in
-                var cols = 0
-                var i = range.location
-                while i < range.location + range.length {
-                    let c = ns.character(at: i)
-                    if c == 0x20 { cols += 1 } else if c == 0x09 { cols += st.tabWidth } else { break }
-                    i += 1
-                }
-                let ps = NSMutableParagraphStyle()
-                ps.headIndent = CGFloat(cols) * spaceW
-                storage.addAttribute(.paragraphStyle, value: ps, range: enclosing)
-            }
-        }
-        storage.endEditing()
     }
 
     // MARK: Language menu
@@ -626,9 +601,6 @@ final class EditorViewController: UIViewController {
                 self?.openInHex()
             })
         }
-        top.append(UIAction(title: "Chat AI (Claude, DeepSeek)", image: UIImage(systemName: "bubble.left.and.bubble.right")) { [weak self] _ in
-            self?.presentAIChat()
-        })
         top.append(makeToolsMenu())
         top.append(UIAction(title: "Cài đặt", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             self?.settingsTapped()
