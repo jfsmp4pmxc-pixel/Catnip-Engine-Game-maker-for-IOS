@@ -100,6 +100,8 @@ struct AppSettings: Codable {
     var expandedFolders: [String] = []
     var showLineNumbers: Bool = true
     var wrapLines: Bool = false      // (cũ, không còn dùng: editor luôn ngắt dòng mềm)
+    var shellKind: String = "auto"     // "auto" (iSH nếu có, không thì Catnip Shell), "catnip", "ish", "custom"
+    var customShell: String = ""       // lệnh shell tuỳ chỉnh chạy trong iSH, ví dụ /bin/zsh hoặc /bin/bash -l
     var scrollHorizontal: Bool = false // true = không ngắt dòng, cuộn ngang; false = ngắt dòng mềm
     var lockPortrait: Bool = false   // true = luôn giữ chiều dọc (cả màn hình lẫn bàn phím)
     var fontName: String?            // PostScript name của font editor; nil = font hệ thống
@@ -125,6 +127,8 @@ struct AppSettings: Codable {
         expandedFolders = try c.decodeIfPresent([String].self, forKey: .expandedFolders) ?? []
         showLineNumbers = try c.decodeIfPresent(Bool.self, forKey: .showLineNumbers) ?? true
         wrapLines       = try c.decodeIfPresent(Bool.self, forKey: .wrapLines) ?? false
+        shellKind       = try c.decodeIfPresent(String.self, forKey: .shellKind) ?? "auto"
+        customShell     = try c.decodeIfPresent(String.self, forKey: .customShell) ?? ""
         scrollHorizontal = try c.decodeIfPresent(Bool.self, forKey: .scrollHorizontal) ?? false
         lockPortrait    = try c.decodeIfPresent(Bool.self, forKey: .lockPortrait) ?? false
         fontName        = try c.decodeIfPresent(String.self, forKey: .fontName)

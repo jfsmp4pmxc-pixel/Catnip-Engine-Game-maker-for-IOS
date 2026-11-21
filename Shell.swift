@@ -344,7 +344,7 @@ final class ShellViewController: UIViewController, UITextFieldDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Shell"
+        title = "Catnip Shell"
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
 
@@ -472,6 +472,34 @@ final class ShellViewController: UIViewController, UITextFieldDelegate {
     }
 }
 
+/// Loại shell người dùng chọn ở Cài đặt → Công cụ.
+enum ShellChoice: String {
+    case catnip, ish, custom
+
+    /// "auto" → iSH nếu bản build có nhúng, không thì Catnip Shell. Không có iSH thì luôn là Catnip Shell.
+    static var current: ShellChoice {
+        guard IshAvailability.isEmbedded else { return .catnip }
+        let st = SettingsStore.shared.settings
+        if st.shellKind == "custom", !st.customShell.trimmingCharacters(in: .whitespaces).isEmpty { return .custom }
+        return ShellChoice(rawValue: st.shellKind) ?? .ish
+    }
+
+    var displayName: String {
+        switch self {
+        case .catnip: return "Catnip Shell"
+        case .ish:    return "iSH (Linux)"
+        case .custom: return "Tuỳ chỉnh"
+        }
+    }
+
+    /// Lệnh khởi động cho iSH (nil = shell đăng nhập mặc định).
+    static var customCommand: [String]? {
+        guard current == .custom else { return nil }
+        let line = SettingsStore.shared.settings.customShell.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ["/bin/sh", "-c", "exec " + line]
+    }
+}
+
 enum IshAvailability {
     /// Bản build này có nhúng iSH (Linux thật) hay không.
     static var isEmbedded: Bool {
@@ -496,11 +524,10 @@ extension UIViewController {
 
     /// Mở cửa sổ shell: iSH (Linux thật) nếu bản build có nhúng, không thì shell dựng sẵn ở trên.
     func presentShell() {
+        var vc: UIViewController = ShellViewController()      // Catnip Shell (dựng sẵn)
         #if CATNIP_HAS_ISH
-        let vc: UIViewController = IshShellViewController()
-        #else
-        let vc: UIViewController = ShellViewController()
+        if ShellChoice.current != .catnip { vc = IshShellViewController() }
         #endif
-        present(CatnipNavigationController(rootViewController: vc), animated: true)
+        topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
     }
 }

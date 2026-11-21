@@ -275,6 +275,14 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         }
     }
 
+    /// Mở lại phiên shell (sau khi đổi lệnh shell tuỳ chỉnh).
+    func restartSession() {
+        if case .running = state {
+            switchingProject = true
+            IshBridge.killSession()
+        }
+    }
+
     /// Báo đã thoát khỏi dự án (về danh sách dự án): shell quay về /root.
     func leaveProject() {
         desiredProject = nil
@@ -306,7 +314,7 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         let directory = desiredProject.flatMap { Self.guestPath(for: $0) }
         sessionProject = directory == nil ? nil : desiredProject
         lastStart = Date()
-        let err = IshBridge.startSession(directory: directory, command: nil, output: { [weak self] data in
+        let err = IshBridge.startSession(directory: directory, command: ShellChoice.customCommand, output: { [weak self] data in
             self?.terminalView.feed(byteArray: ArraySlice([UInt8](data)))
         }, exit: { [weak self] code in
             self?.sessionEnded(code: Int(code))

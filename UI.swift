@@ -420,7 +420,7 @@ final class SettingsViewController: UITableViewController {
         case .editing: return 6
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return IshAvailability.isEmbedded ? 4 : 3   // bật shell + cỡ chữ shell (+ cài lại bộ công cụ) + định cú pháp
+        case .tools:   return IshAvailability.isEmbedded ? 5 : 4   // bật shell + cỡ chữ shell + loại shell (+ cài lại bộ công cụ) + định cú pháp
         }
     }
 
@@ -585,6 +585,12 @@ final class SettingsViewController: UITableViewController {
                     SettingsStore.shared.update { $0.terminalFontSize = v }
                     self?.settingsChanged()
                 }
+            } else if indexPath.row == 2 {
+                let sc = ShellChoice.current
+                cell.textLabel?.text = "Loại shell: " + sc.displayName
+                cell.imageView?.image = UIImage(systemName: "terminal")
+                cell.imageView?.tintColor = t.accentColor
+                cell.accessoryType = .disclosureIndicator
             } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
                 cell.textLabel?.text = "Định cú pháp (TextMate)…"
                 cell.textLabel?.textColor = t.accentColor
@@ -634,6 +640,8 @@ final class SettingsViewController: UITableViewController {
         case .tools where indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1:
             navigationController?.pushViewController(GrammarsViewController(), animated: true)
         case .tools where indexPath.row == 2:
+            chooseShell(from: tableView.cellForRow(at: indexPath))
+        case .tools where indexPath.row == 3:
             presentIshSetup()
         case .markdown where indexPath.row >= 1:
             let keys = ["auto", "githubLight", "githubDark"]
@@ -643,6 +651,41 @@ final class SettingsViewController: UITableViewController {
         default:
             break
         }
+    }
+
+    private func chooseShell(from source: UIView?) {
+        let sheet = UIAlertController(title: "Loại shell", message: IshAvailability.isEmbedded ? nil : "Bản build này không nhúng iSH nên chỉ có Catnip Shell.", preferredStyle: .actionSheet)
+        func set(_ kind: String) {
+            SettingsStore.shared.update { $0.shellKind = kind }
+            #if CATNIP_HAS_ISH
+            IshRuntime.shared.restartSession()
+            #endif
+            tableView.reloadSections([Section.tools.rawValue], with: .none)
+            settingsChanged()
+        }
+        sheet.addAction(UIAlertAction(title: "Catnip Shell (dựng sẵn, nhẹ)", style: .default) { _ in set("catnip") })
+        if IshAvailability.isEmbedded {
+            sheet.addAction(UIAlertAction(title: "iSH (Linux thật)", style: .default) { _ in set("ish") })
+            sheet.addAction(UIAlertAction(title: "Tuỳ chỉnh (lệnh chạy trong iSH)…", style: .default) { [weak self] _ in
+                let a = UIAlertController(title: "Shell tuỳ chỉnh", message: "Lệnh chạy trong iSH thay cho shell mặc định, ví dụ /bin/bash -l hoặc /usr/bin/python3.", preferredStyle: .alert)
+                a.addTextField { tf in
+                    tf.text = SettingsStore.shared.settings.customShell
+                    tf.placeholder = "/bin/bash -l"
+                    tf.autocapitalizationType = .none
+                    tf.autocorrectionType = .no
+                }
+                a.addAction(UIAlertAction(title: "Lưu", style: .default) { [weak a] _ in
+                    let cmd = (a?.textFields?.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                    SettingsStore.shared.update { $0.customShell = cmd }
+                    set(cmd.isEmpty ? "ish" : "custom")
+                })
+                a.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+                self?.present(a, animated: true)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+        sheet.popoverPresentationController?.sourceView = source ?? view
+        present(sheet, animated: true)
     }
 
     private func presentThemeEditor(_ theme: Theme) {
