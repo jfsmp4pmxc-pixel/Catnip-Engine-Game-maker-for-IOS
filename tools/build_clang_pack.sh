@@ -26,11 +26,14 @@ cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-host" \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF
 ninja -C "$OUT/build-host" llvm-tblgen llvm-min-tblgen clang-tblgen
 
+# Lưu ý: dùng CMAKE_SYSTEM_NAME=Darwin (không phải iOS) vì LLVM chọn cờ linker theo tên 'Darwin';
+# nếu để iOS, nó dùng cờ kiểu Linux (--whole-archive, -z defs...) và liên kết hỏng.
 # 2) LLVM + Clang cho iOS arm64 (thư viện động libLLVM + libclang-cpp).
 cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" \
   -DCMAKE_BUILD_TYPE=MinSizeRel \
-  -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
-  -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+  -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_CROSSCOMPILING=ON -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
+  -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+  -DLLVM_HOST_TRIPLE=arm64-apple-ios15.0 \
   -DCMAKE_INSTALL_PREFIX="$OUT/install" \
   -DLLVM_ENABLE_PROJECTS="clang" \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_DEFAULT_TARGET_TRIPLE="arm64-apple-ios15.0" \
