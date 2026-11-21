@@ -1,0 +1,45 @@
+name: Build Clang toolchain (gói Clang++ cho dự án C++)
+
+# Tạo catnip-clang-ios-arm64.tar.z và đăng lên Release "clang-toolchain" (bản latest) để app tải ở bước setup.
+# Rất nặng (build LLVM/Clang cho iOS). Chưa kiểm chứng.
+
+on:
+  workflow_dispatch:
+    inputs:
+      llvm_ref:
+        description: "Tag LLVM"
+        required: true
+        default: "llvmorg-20.1.8"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: macos-15
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cài cmake, ninja
+        run: brew install cmake ninja
+      - name: Lấy header SDL3 (love-apple-dependencies)
+        run: |
+          git init -q deps
+          git -C deps remote add origin https://github.com/love2d/love-apple-dependencies
+          git -C deps fetch -q --depth 1 origin a5522634f1e581a1ebab73bf3ab4bd7a853b7a3e
+          git -C deps checkout -q FETCH_HEAD
+          H=$(find deps -type d -path '*SDL3.xcframework/ios-arm64/*Headers' | head -1)
+          echo "SDL3_HEADERS=$PWD/$H" >> "$GITHUB_ENV"
+          echo "SDL3 headers: $H"
+      - name: Build gói
+        env:
+          OUT: ${{ github.workspace }}/clang-pack
+          LLVM_REF: ${{ inputs.llvm_ref }}
+        run: tools/build_clang_pack.sh
+      - name: Đăng Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view clang-toolchain >/dev/null 2>&1 || gh release create clang-toolchain --title "Clang toolchain" --notes "Gói Clang++ cho dự án C++ trong Catnip" --latest=false
+          gh release upload clang-toolchain clang-pack/catnip-clang-ios-arm64.tar.z --clobber

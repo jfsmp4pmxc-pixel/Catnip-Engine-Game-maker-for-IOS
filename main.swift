@@ -92,14 +92,27 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // Lần chạy đầu: cài môi trường Linux (có thể bỏ qua) rồi mới vào màn hình chính.
         if !SettingsStore.shared.settings.ishSetupDone {
             let setup = IshSetupViewController()
-            setup.onFinish = { [weak self] in self?.showMain(animated: true) }
+            setup.onFinish = { [weak self] in self?.afterIshSetup(animated: true) }
             w.rootViewController = setup
             w.makeKeyAndVisible()
             return true
         }
         #endif
-        showMain(animated: false)
+        afterIshSetup(animated: false)
         return true
+    }
+
+    /// Bước setup tiếp theo: tải Clang++ (có thể bỏ qua) rồi vào màn hình chính.
+    private func afterIshSetup(animated: Bool) {
+        guard let w = window else { return }
+        if !SettingsStore.shared.settings.clangSetupDone && !ClangToolchain.isInstalled {
+            let setup = ClangSetupViewController()
+            setup.onFinish = { [weak self] in self?.showMain(animated: true) }
+            w.rootViewController = setup
+            w.makeKeyAndVisible()
+            return
+        }
+        showMain(animated: animated)
     }
 
     /// Dựng màn hình chính (danh sách dự án) và mở lại dự án đang làm dở lần trước (nếu còn).

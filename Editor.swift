@@ -448,9 +448,26 @@ final class EditorViewController: UIViewController {
         present(nav, animated: true)
     }
 
+    /// Chạy dự án C++ bằng Clang++ (JIT) và mở console tương tác.
+    private func runCpp() {
+        guard !CppEngine.shared.running, flushSave() else { return }
+        guard ClangToolchain.isInstalled else {
+            textView.resignFirstResponder()
+            let setup = ClangSetupViewController()
+            setup.modalPresentationStyle = .fullScreen
+            setup.onFinish = { [weak setup] in setup?.dismiss(animated: true) }
+            topPresenter.present(setup, animated: true)
+            return
+        }
+        textView.resignFirstResponder()
+        let vc = CppConsoleViewController(project: project)
+        topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
+    }
+
     /// Chạy dự án bằng lõi LÖVE. Chặn tại đây tới khi game thoát, rồi quay lại editor.
     /// Trong lúc chạy có cửa sổ nổi với nút Log / Thoát; log của game được lưu vào GameLog.
     @objc private func runTapped() {
+        if kind == .cpp { runCpp(); return }
         guard !isGameRunning, flushSave() else { return }
         #if CATNIP_HAS_LOVE
         guard store.read(project: project, path: "main.lua") != nil else {
@@ -585,7 +602,7 @@ final class EditorViewController: UIViewController {
             }
         }
         var top: [UIMenuElement] = []
-        if kind.canRun {
+        if kind == .love {
             top.append(UIAction(title: "Xem log lần chạy gần nhất", image: UIImage(systemName: "text.alignleft")) { [weak self] _ in
                 self?.logTapped()
             })

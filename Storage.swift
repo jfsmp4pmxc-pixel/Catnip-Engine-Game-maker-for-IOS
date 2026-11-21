@@ -113,6 +113,8 @@ struct AppSettings: Codable {
     var useTabs: Bool = false           // true = thụt lề bằng ký tự Tab
     var showHiddenFiles: Bool = false   // hiện file/thư mục ẩn (tên bắt đầu bằng dấu chấm) trong cây file
     var spellCheckMarkdown: Bool = true // soát lỗi chính tả tiếng Việt trong file Markdown (tô đỏ)
+    var clangSetupDone: Bool = false    // đã qua bước tải Clang++ ở setup (cài xong hoặc bỏ qua)
+    var clangPackURL: String = ""       // địa chỉ gói Clang tuỳ chỉnh; rỗng = release clang-toolchain của repo
     var ishSetupDone: Bool = false      // đã qua màn hình cài môi trường Linux lần đầu (cài xong hoặc bỏ qua)
 
     init() {}
@@ -140,6 +142,8 @@ struct AppSettings: Codable {
         useTabs         = try c.decodeIfPresent(Bool.self, forKey: .useTabs) ?? false
         showHiddenFiles = try c.decodeIfPresent(Bool.self, forKey: .showHiddenFiles) ?? false
         spellCheckMarkdown = try c.decodeIfPresent(Bool.self, forKey: .spellCheckMarkdown) ?? true
+        clangSetupDone  = try c.decodeIfPresent(Bool.self, forKey: .clangSetupDone) ?? false
+        clangPackURL    = try c.decodeIfPresent(String.self, forKey: .clangPackURL) ?? ""
         ishSetupDone    = try c.decodeIfPresent(Bool.self, forKey: .ishSetupDone) ?? false
     }
 }
@@ -192,7 +196,7 @@ struct FileEntry {
 // MARK: - Project kind
 
 enum ProjectKind: String, Codable, CaseIterable {
-    case love, scratch, python, twoObj, catnip, ui
+    case love, scratch, python, twoObj, catnip, ui, cpp
 
     var displayName: String {
         switch self {
@@ -202,6 +206,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .twoObj:  return "2o obj"
         case .catnip:  return "Catnip Engine"
         case .ui:      return "UI"
+        case .cpp:     return "C++"
         }
     }
 
@@ -210,6 +215,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .love:    return "Game 2D dùng LÖVE (Lua), chạy được ngay"
         case .scratch: return "Dự án bình thường, tự do tạo file"
         case .ui:      return "Giao diện SwiftUI, xem trước tương tác được"
+        case .cpp:     return "C++ chạy bằng Clang++ trong app (CLI, console, SDL3)"
         case .python, .twoObj, .catnip: return "Sắp ra mắt"
         }
     }
@@ -222,15 +228,33 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .twoObj:  return "cube"
         case .catnip:  return "pawprint.fill"
         case .ui:      return "rectangle.on.rectangle"
+        case .cpp:     return "terminal"
         }
     }
 
     /// Chỉ LÖVE và dự án thường dùng được; các loại còn lại là "coming soon".
-    var isAvailable: Bool { self == .love || self == .scratch || self == .ui }
+    var isAvailable: Bool { self == .love || self == .scratch || self == .ui || self == .cpp }
     /// Chỉ dự án LÖVE mới có nút Chạy.
-    var canRun: Bool { self == .love }
+    var canRun: Bool { self == .love || self == .cpp }
     /// Dự án UI có nút Preview (thay cho Chạy).
     var canPreview: Bool { self == .ui }
+}
+
+enum CppTemplate {
+    static let main = """
+    // Dự án C++ — bấm Chạy để biên dịch bằng Clang++ ngay trong app.
+    // Console tương tác: cout/cin hoạt động như terminal.
+    #include <iostream>
+    #include <string>
+
+    int main() {
+        std::string name;
+        std::cout << "Tên bạn là gì? " << std::flush;
+        std::getline(std::cin, name);
+        std::cout << "Xin chào, " << name << "!\\n";
+        return 0;
+    }
+    """
 }
 
 private struct ProjectMeta: Codable { var kind: ProjectKind }
@@ -304,6 +328,8 @@ final class ProjectStore {
                 try "# \(n)\n".write(to: url.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
             case .ui:
                 try UIPreviewTemplate.contentView.write(to: url.appendingPathComponent("ContentView.swift"), atomically: true, encoding: .utf8)
+            case .cpp:
+                try CppTemplate.main.write(to: url.appendingPathComponent("main.cpp"), atomically: true, encoding: .utf8)
             case .python, .twoObj, .catnip:
                 break
             }

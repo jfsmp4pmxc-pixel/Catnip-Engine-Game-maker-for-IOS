@@ -420,7 +420,7 @@ final class SettingsViewController: UITableViewController {
         case .editing: return 6
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return IshAvailability.isEmbedded ? 5 : 4   // bật shell + cỡ chữ shell + loại shell (+ cài lại bộ công cụ) + định cú pháp
+        case .tools:   return IshAvailability.isEmbedded ? 6 : 5   // bật shell + cỡ chữ shell + loại shell + Clang++ (+ cài lại bộ công cụ) + định cú pháp
         }
     }
 
@@ -591,6 +591,11 @@ final class SettingsViewController: UITableViewController {
                 cell.imageView?.image = UIImage(systemName: "terminal")
                 cell.imageView?.tintColor = t.accentColor
                 cell.accessoryType = .disclosureIndicator
+            } else if indexPath.row == 3 {
+                cell.textLabel?.text = "Clang++ (C++): " + (ClangToolchain.isInstalled ? "đã cài" : "chưa cài")
+                cell.imageView?.image = UIImage(systemName: "hammer")
+                cell.imageView?.tintColor = t.accentColor
+                cell.accessoryType = .disclosureIndicator
             } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
                 cell.textLabel?.text = "Định cú pháp (TextMate)…"
                 cell.textLabel?.textColor = t.accentColor
@@ -642,6 +647,14 @@ final class SettingsViewController: UITableViewController {
         case .tools where indexPath.row == 2:
             chooseShell(from: tableView.cellForRow(at: indexPath))
         case .tools where indexPath.row == 3:
+            let setup = ClangSetupViewController()
+            setup.modalPresentationStyle = .fullScreen
+            setup.onFinish = { [weak self, weak setup] in
+                setup?.dismiss(animated: true)
+                self?.tableView.reloadSections([Section.tools.rawValue], with: .none)
+            }
+            present(setup, animated: true)
+        case .tools where indexPath.row == 4:
             presentIshSetup()
         case .markdown where indexPath.row >= 1:
             let keys = ["auto", "githubLight", "githubDark"]
