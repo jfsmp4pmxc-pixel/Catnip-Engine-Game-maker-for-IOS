@@ -223,6 +223,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
         var pos = 0.0
         var longName: String?
         var extracted: [String] = []
+        var sawEnd = false
 
         func skip(_ n: Int) throws {
             if n > 0 { try h.seek(toOffset: try h.offset() + UInt64(n)) }
@@ -231,7 +232,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
         while true {
             guard let hdr = try h.read(upToCount: 512), hdr.count == 512 else { break }
             pos += 512
-            if hdr.allSatisfy({ $0 == 0 }) { break }
+            if hdr.allSatisfy({ $0 == 0 }) { sawEnd = true; break }
             var name = cString(hdr.subdata(in: 0..<100))
             let size = octal(hdr.subdata(in: 124..<136))
             let mode = octal(hdr.subdata(in: 100..<108))
@@ -284,6 +285,9 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
             }
             pos += Double(padded)
             progress(min(pos / max(total, 1), 1))
+        }
+        if !sawEnd {
+            throw ToolchainError("Giải nén bị dừng giữa chừng (tar cụt sau \(extracted.count) file, đã đọc \(Int(pos / 1_048_576)) MB). Thử tải lại; nếu vẫn lỗi hãy gửi dòng này.")
         }
         return extracted
     }
