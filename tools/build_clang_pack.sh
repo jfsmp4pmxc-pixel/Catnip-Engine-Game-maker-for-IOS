@@ -70,6 +70,25 @@ xcrun --sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=15.0 -isysroot "
   -o "$OUT/pack/lib/libcatnipclang.dylib"
 cp -L "$OUT/build-ios/lib/"libLLVM*.dylib "$OUT/build-ios/lib/"libclang-cpp*.dylib "$OUT/pack/lib/"
 xcrun strip -x "$OUT/pack/lib/"*.dylib || true
+# libclang-cpp link vào CoreServices.framework (không có trên iOS) → dyld báo thiếu thư viện và app crash.
+# Đổi thành LC_LOAD_WEAK_DYLIB để thiếu cũng không sao.
+python3 - "$OUT/pack/lib" <<'PY'
+import sys, os, struct
+for fn in os.listdir(sys.argv[1]):
+    if not fn.endswith(".dylib"): continue
+    path = os.path.join(sys.argv[1], fn)
+    d = bytearray(open(path, "rb").read())
+    nc = struct.unpack_from("<I", d, 16)[0]; o = 32
+    for _ in range(nc):
+        c, s = struct.unpack_from("<2I", d, o)
+        if c == 0xC:
+            off = struct.unpack_from("<I", d, o + 8)[0]
+            name = bytes(d[o + off:o + s]).split(b"\0")[0]
+            if name.startswith(b"/System/Library/Frameworks/CoreServices"):
+                struct.pack_into("<I", d, o, 0x80000018); print("weak:", fn, name.decode())
+        o += s
+    open(path, "wb").write(d)
+PY
 # iOS chỉ nạp dylib có chữ ký (ít nhất ad-hoc). strip làm mất chữ ký nên ký lại SAU strip.
 for f in "$OUT/pack/lib/"*.dylib; do
   codesign --force --sign - "$f"
