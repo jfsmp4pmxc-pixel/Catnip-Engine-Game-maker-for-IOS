@@ -10,6 +10,7 @@
 // cùng các định nghĩa CATNIP_HAS_LOVE / CATNIP_HAS_ISH tương ứng).
 #ifdef CATNIP_HAS_LOVE
 #import "LoveBridge.h"
+#import "CppInput.h"
 #endif
 
 #ifdef CATNIP_HAS_ISH

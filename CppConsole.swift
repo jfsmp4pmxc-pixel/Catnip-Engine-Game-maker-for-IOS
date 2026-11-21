@@ -91,11 +91,13 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
 
     private func start() {
         let url = ProjectStore.shared.projectURL(project)
+        if CppEngine.usesGUI(project: url) { CppControlsOverlay.show(project: project) }   // CLI thì không hiện
         CppEngine.shared.run(project: url, onOutput: { [weak self] s in
             DispatchQueue.main.async { self?.append(s) }
         }, onFinish: { [weak self] result in
             guard let self = self else { return }
             self.finished = true
+            CppControlsOverlay.hide()
             self.input.isEnabled = false
             switch result {
             case .success(let code):
@@ -131,6 +133,7 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
     @objc private func eofTapped() { CppEngine.shared.closeInput() }
     @objc private func copyTapped() { UIPasteboard.general.string = output.text }
     @objc private func closeTapped() {
+        CppControlsOverlay.hide()
         CppEngine.shared.closeInput()
         dismiss(animated: true)
     }

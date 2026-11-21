@@ -29,6 +29,17 @@ int main() {
 }
 ```
 
+## Điều khiển ảo cho GUI (kiểu PojavLauncher)
+Khi chương trình dùng SDL, một lớp điều khiển nổi lên trên cửa sổ game. Chương trình CLI thì lớp này **ẩn**.
+
+- **Con trỏ chuột:** kéo ngón tay trên màn hình để di chuyển con trỏ (như bàn chạm laptop). Chạm nhanh = chuột trái, chạm hai ngón = chuột phải, giữ ngón rồi kéo = giữ chuột trái (kéo-thả), kéo hai ngón = cuộn.
+- **Nút điều khiển:** mỗi nút gán một phím hoặc nút chuột. Mặc định có W A S D, Space, Shift, E, Esc, chuột trái/phải.
+- **Ba nút nhỏ góc trên trái:** ⚙ menu; ⌨ **buộc mở bàn phím ảo**; 👁 ẩn/hiện các nút điều khiển (con trỏ vẫn dùng được).
+- **⚙ → Chỉnh sửa nút điều khiển:** kéo để di chuyển nút; chạm vào nút để đổi nhãn, gán phím/chuột (chữ, số, mũi tên, F1–F12, phím đặc biệt, chuột, cuộn), kích thước, độ mờ, chế độ bật/tắt (giữ) và hình (tròn/vuông), hoặc xoá. "+ Thêm nút" thêm nút mới, "Mặc định" đặt lại bố cục.
+- **⚙ → Tuỳ chỉnh con trỏ:** kiểu (mũi tên, chấm, chữ thập, vòng), kích thước, màu, độ mờ, tốc độ kéo.
+- **⚙ → Chuyển sang chạm trực tiếp:** tắt con trỏ, để SDL nhận chạm như bình thường.
+- Bố cục lưu riêng cho từng dự án. Phím và chuột được gửi vào SDL dưới dạng sự kiện, nên chương trình cần đọc bằng `SDL_PollEvent`; `SDL_GetKeyboardState` không thấy phím ảo.
+
 ## Giới hạn
 - Tính năng **chưa kiểm chứng trên máy thật**; lỗi nạp thư viện sẽ hiện trong console.
 - Không có tiến trình riêng: không dừng ép được chương trình lặp vô hạn, ngoài việc thoát app.

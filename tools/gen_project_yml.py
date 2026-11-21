@@ -15,7 +15,7 @@ with_love = env("WITH_LOVE") == "true"
 with_ish = env("WITH_ISH") == "true"
 
 sources = ["main.swift", "Models.swift", "Storage.swift", "UI.swift", "Editor.swift", "EditorSidebar.swift",
-           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift"]
+           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift", "CppControls.swift"]
 resources = ["Resources"]
 ldflags = ["$(inherited)"]
 header_paths = ["$(inherited)"]
@@ -32,7 +32,7 @@ if with_love:
     if not (love_dir and love_lib):
         sys.exit("WITH_LOVE cần LOVE_DIR và LOVE_LIB")
     xc = f"{love_dir}/platform/xcode"
-    sources += ["LoveBridge.mm", "LoveBridge.h"]
+    sources += ["LoveBridge.mm", "LoveBridge.h", "CppInput.mm", "CppInput.h"]
     bridging = True
     swift_conditions.append("CATNIP_HAS_LOVE")
     gcc_defs.append("CATNIP_HAS_LOVE=1")

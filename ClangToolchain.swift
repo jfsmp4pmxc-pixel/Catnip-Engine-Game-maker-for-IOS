@@ -344,6 +344,11 @@ final class CppEngine {
         return out
     }
 
+    /// Chương trình có GUI (dùng SDL) thì cần lớp điều khiển ảo; CLI thì không.
+    static func usesGUI(project: URL) -> Bool {
+        sources(in: project).contains { (try? String(contentsOfFile: $0, encoding: .utf8))?.contains("SDL") == true }
+    }
+
     /// Chạy dự án. `usesMainThread`: chương trình GUI (SDL) phải chạy ở main thread của iOS.
     /// `onOutput` gọi từ thread nền; `onFinish` gọi trên main thread với mã thoát (hoặc lỗi).
     func run(project: URL, onOutput: @escaping (String) -> Void, onFinish: @escaping (Result<Int32, Error>) -> Void) {
