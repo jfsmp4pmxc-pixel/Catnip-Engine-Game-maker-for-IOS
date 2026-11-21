@@ -21,8 +21,14 @@ jobs:
     timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
-      - name: Cài cmake, ninja
-        run: brew install cmake ninja
+      - name: Cài cmake, ninja, ccache
+        run: brew install cmake ninja ccache
+      - name: Khôi phục bộ nhớ đệm ccache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-llvm-${{ inputs.llvm_ref }}-${{ github.run_id }}
+          restore-keys: ccache-llvm-${{ inputs.llvm_ref }}-
       - name: Lấy header SDL3 (love-apple-dependencies)
         run: |
           git init -q deps
@@ -36,7 +42,16 @@ jobs:
         env:
           OUT: ${{ github.workspace }}/clang-pack
           LLVM_REF: ${{ inputs.llvm_ref }}
-        run: tools/build_clang_pack.sh
+        run: |
+          ccache --max-size=3G
+          tools/build_clang_pack.sh
+          ccache -s
+      - name: Lưu bộ nhớ đệm ccache (cả khi build lỗi)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/Library/Caches/ccache
+          key: ccache-llvm-${{ inputs.llvm_ref }}-${{ github.run_id }}
       - name: Đăng Release
         env:
           GH_TOKEN: ${{ github.token }}
