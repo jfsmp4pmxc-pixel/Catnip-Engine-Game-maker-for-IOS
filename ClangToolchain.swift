@@ -157,17 +157,27 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
     // MARK: Giải nén (deflate thô → tar → file)
 
     static func inflate(_ src: URL, to dst: URL, progress: (Double) -> Void) throws {
-        // NSData.decompressed(.zlib) = deflate thô (giống Python zlib wbits=-15); đơn giản và chắc hơn vòng lặp compression_stream.
-        let packed = try Data(contentsOf: src, options: .alwaysMapped)
-        guard packed.count > 0 else { throw ToolchainError("File tải về rỗng (0 byte).") }
-        progress(0.1)
-        let out: NSData
-        do { out = try (packed as NSData).decompressed(using: .zlib) }
-        catch { throw ToolchainError("Giải nén thất bại (gói \(packed.count) byte): \(error.localizedDescription)") }
-        progress(0.8)
-        guard out.length >= 512 else { throw ToolchainError("Giải nén ra \(out.length) byte (gói \(packed.count) byte, 4 byte đầu: \(packed.prefix(4).map { String(format: "%02x", $0) }.joined())).") }
-        try out.write(to: dst, options: .atomic)
-        progress(1)
+        // Giải deflate thô theo luồng bằng OutputFilter (Compression, iOS 13+): không nạp cả gói vào RAM, không bị treo như decompressed().
+        let fm = FileManager.default
+        fm.createFile(atPath: dst.path, contents: nil)
+        let input = try FileHandle(forReadingFrom: src)
+        let output = try FileHandle(forWritingTo: dst)
+        defer { try? input.close(); try? output.close() }
+        let total = Double((try? src.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 1)
+        var written = 0
+        let filter = try OutputFilter(.decompress, using: .zlib, bufferCapacity: 1 << 20) { (data: Data?) in
+            if let d = data, !d.isEmpty { try output.write(contentsOf: d); written += d.count }
+        }
+        var read = 0.0
+        while true {
+            let chunk = try input.read(upToCount: 1 << 20) ?? Data()
+            if chunk.isEmpty { break }
+            read += Double(chunk.count)
+            try filter.write(chunk)
+            progress(min(read / max(total, 1), 1))
+        }
+        try filter.finalize()
+        if written < 512 { throw ToolchainError("Giải nén ra \(written) byte (gói \(Int(read)) byte).") }
     }
 
     private static func octal(_ d: Data) -> Int {
