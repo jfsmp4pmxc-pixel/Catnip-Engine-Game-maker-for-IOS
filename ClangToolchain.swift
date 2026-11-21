@@ -239,7 +239,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
             }
             if let ln = longName { name = ln; longName = nil }
 
-            let parts = name.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
+            let parts = name.split(separator: "/", omittingEmptySubsequences: true).map(String.init).filter { $0 != "." }
             guard !name.hasPrefix("/"), !parts.contains("..") else {
                 try skip(padded); pos += Double(padded); continue
             }

@@ -24,7 +24,7 @@ fi
 cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-host" \
   -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS="clang" \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF
-ninja -C "$OUT/build-host" llvm-tblgen clang-tblgen
+ninja -C "$OUT/build-host" llvm-tblgen llvm-min-tblgen clang-tblgen
 
 # 2) LLVM + Clang cho iOS arm64 (thư viện động libLLVM + libclang-cpp).
 cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" \
@@ -35,6 +35,7 @@ cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" \
   -DLLVM_ENABLE_PROJECTS="clang" \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_DEFAULT_TARGET_TRIPLE="arm64-apple-ios15.0" \
   -DLLVM_NATIVE_TOOL_DIR="$OUT/build-host/bin" \
+  -DLLVM_TABLEGEN="$OUT/build-host/bin/llvm-tblgen" -DCLANG_TABLEGEN="$OUT/build-host/bin/clang-tblgen" \
   -DLLVM_BUILD_LLVM_DYLIB=ON -DLLVM_LINK_LLVM_DYLIB=ON -DCLANG_LINK_CLANG_DYLIB=ON \
   -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_UTILS=OFF \
   -DLLVM_BUILD_TOOLS=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ZSTD=OFF -DLLVM_ENABLE_LIBXML2=OFF \
@@ -44,11 +45,9 @@ cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" \
   -DCLANG_TOOL_CLANG_REPL_BUILD=OFF -DCLANG_TOOL_C_INDEX_TEST_BUILD=OFF -DCLANG_TOOL_LIBCLANG_BUILD=OFF \
   -DCLANG_TOOL_CLANG_REFACTOR_BUILD=OFF -DCLANG_TOOL_AMDGPU_ARCH_BUILD=OFF -DCLANG_TOOL_NVPTX_ARCH_BUILD=OFF \
   -DCLANG_TOOL_CLANG_FORMAT_BUILD=OFF -DCLANG_TOOL_CLANG_SCAN_DEPS_BUILD=OFF -DCLANG_TOOL_CLANG_OFFLOAD_BUNDLER_BUILD=OFF \
-  -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=OFF -DCLANG_TOOL_CLANG_NVLINK_WRAPPER_BUILD=OFF -DCLANG_TOOL_CLANG_SHLIB_BUILD=OFF \
-  -DCLANG_TOOL_CLANG_FUZZER_BUILD=OFF -DCLANG_TOOL_DIAGTOOL_BUILD=OFF -DCLANG_TOOL_DRIVER_BUILD=OFF
-ninja -C "$OUT/build-ios" install-LLVM install-clang-cpp install-clang-resource-headers \
-  install-llvm-headers install-clang-headers install-cmake-exports install-clang-cmake-exports || \
-  ninja -C "$OUT/build-ios" install
+  -DCLANG_TOOL_CLANG_LINKER_WRAPPER_BUILD=OFF -DCLANG_TOOL_CLANG_NVLINK_WRAPPER_BUILD=OFF \
+  -DCLANG_TOOL_CLANG_FUZZER_BUILD=OFF -DCLANG_TOOL_DIAGTOOL_BUILD=OFF
+ninja -C "$OUT/build-ios" LLVM clang-cpp clang-resource-headers
 
 # 3) libcatnipclang.dylib (API C cho app).
 CLANG_INC="$SRC/clang/include"
@@ -63,13 +62,14 @@ xcrun --sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=15.0 -isysroot "
   -L"$OUT/build-ios/lib" -lclang-cpp -lLLVM \
   -Wl,-rpath,@loader_path -install_name @rpath/libcatnipclang.dylib \
   -o "$OUT/pack/lib/libcatnipclang.dylib"
-cp "$OUT/build-ios/lib/"libLLVM*.dylib "$OUT/build-ios/lib/"libclang-cpp*.dylib "$OUT/pack/lib/" 2>/dev/null || true
+cp -L "$OUT/build-ios/lib/"libLLVM*.dylib "$OUT/build-ios/lib/"libclang-cpp*.dylib "$OUT/pack/lib/"
 xcrun strip -x "$OUT/pack/lib/"*.dylib || true
+ls -lh "$OUT/pack/lib"
 
 # 4) Header: resource của clang, sysroot iOS (usr/include có cả libc++), SDL3.
-mkdir -p "$OUT/pack/resource" "$OUT/pack/sysroot/usr" "$OUT/pack/include"
-cp -R "$OUT/install/lib/clang" "$OUT/pack/resource/lib-clang-tmp" 2>/dev/null || true
-mkdir -p "$OUT/pack/resource/lib" && rm -rf "$OUT/pack/resource/lib/clang" && mv "$OUT/pack/resource/lib-clang-tmp" "$OUT/pack/resource/lib/clang"
+mkdir -p "$OUT/pack/sysroot/usr" "$OUT/pack/include"
+mkdir -p "$OUT/pack/resource/lib"
+cp -R "$OUT/build-ios/lib/clang" "$OUT/pack/resource/lib/clang"
 cp -R "$SDK/usr/include" "$OUT/pack/sysroot/usr/include"
 if [ -n "${SDL3_HEADERS:-}" ] && [ -d "$SDL3_HEADERS" ]; then cp -R "$SDL3_HEADERS" "$OUT/pack/include/SDL3"; fi
 
