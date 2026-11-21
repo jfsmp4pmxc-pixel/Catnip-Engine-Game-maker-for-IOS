@@ -125,13 +125,23 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
                 try Self.inflate(packed, to: tar) { f in self.report(0.6 + f * 0.15, "Đang giải nén…") }
                 try? fm.removeItem(at: staging)
                 try fm.createDirectory(at: staging, withIntermediateDirectories: true)
-                try Self.untar(tar, into: staging) { f in self.report(0.75 + f * 0.25, "Đang chép file…") }
-                guard fm.fileExists(atPath: staging.appendingPathComponent("lib/libcatnipclang.dylib").path) else {
-                    throw ToolchainError("Gói Clang thiếu lib/libcatnipclang.dylib.")
+                let files = try Self.untar(tar, into: staging) { f in self.report(0.75 + f * 0.25, "Đang chép file…") }
+                var base = staging
+                if !fm.fileExists(atPath: staging.appendingPathComponent("lib/libcatnipclang.dylib").path) {
+                    // Có thể gói nằm trong một thư mục con: tìm libcatnipclang.dylib ở bất kỳ đâu.
+                    if let hit = files.first(where: { ($0 as NSString).lastPathComponent == "libcatnipclang.dylib" }) {
+                        let rel = (hit as NSString).deletingLastPathComponent          // .../lib
+                        base = staging.appendingPathComponent((rel as NSString).deletingLastPathComponent)
+                    } else {
+                        let libs = files.filter { $0.hasPrefix("lib/") }.prefix(8).joined(separator: ", ")
+                        let sample = files.prefix(6).joined(separator: ", ")
+                        throw ToolchainError("Gói Clang thiếu lib/libcatnipclang.dylib. Đã giải nén \(files.count) file. Trong lib/: [\(libs)]. Mẫu: [\(sample)].")
+                    }
                 }
                 CppEngine.shared.unload()
                 try? fm.removeItem(at: ClangToolchain.dir)
-                try fm.moveItem(at: staging, to: ClangToolchain.dir)
+                try fm.moveItem(at: base, to: ClangToolchain.dir)
+                if base != staging { try? fm.removeItem(at: staging) }
                 finish(.success(()))
             } catch {
                 try? fm.removeItem(at: staging)
@@ -204,13 +214,15 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
     }
 
     /// Giải nén tar (ustar/GNU, có tên dài kiểu 'L'). Từ chối đường dẫn tuyệt đối hoặc chứa "..".
-    static func untar(_ tar: URL, into root: URL, progress: (Double) -> Void) throws {
+    @discardableResult
+    static func untar(_ tar: URL, into root: URL, progress: (Double) -> Void) throws -> [String] {
         let fm = FileManager.default
         let h = try FileHandle(forReadingFrom: tar)
         defer { try? h.close() }
         let total = Double((try? tar.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 1)
         var pos = 0.0
         var longName: String?
+        var extracted: [String] = []
 
         func skip(_ n: Int) throws {
             if n > 0 { try h.seek(toOffset: try h.offset() + UInt64(n)) }
@@ -244,6 +256,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
                 try skip(padded); pos += Double(padded); continue
             }
             let dest = parts.reduce(root) { $0.appendingPathComponent($1) }
+            if type == UInt8(ascii: "0") || type == 0 { extracted.append(parts.joined(separator: "/")) }
 
             switch type {
             case UInt8(ascii: "5"):
@@ -272,6 +285,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
             pos += Double(padded)
             progress(min(pos / max(total, 1), 1))
         }
+        return extracted
     }
 }
 

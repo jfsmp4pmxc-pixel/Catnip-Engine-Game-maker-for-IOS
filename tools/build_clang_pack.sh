@@ -99,3 +99,19 @@ with open(dst, "wb") as f:
 print("size:", os.path.getsize(dst))
 PY
 ls -lh "$OUT/catnip-clang-ios-arm64.tar.z"
+
+# 6) Kiểm tra gói đúng như app sẽ đọc: giải nén lại bằng python và đòi có các file bắt buộc.
+python3 - "$OUT/catnip-clang-ios-arm64.tar.z" <<'PY'
+import sys, zlib, io, tarfile
+data = zlib.decompressobj(-15).decompress(open(sys.argv[1], "rb").read())
+t = tarfile.open(fileobj=io.BytesIO(data))
+names = [m.name.lstrip("./") for m in t.getmembers() if m.isfile()]
+print("files:", len(names))
+for n in sorted(x for x in names if x.startswith("lib/")): print("  ", n)
+need = ["lib/libcatnipclang.dylib", "lib/libclang-cpp.dylib", "lib/libLLVM.dylib"]
+missing = [n for n in need if n not in names]
+if missing: sys.exit("Gói thiếu: " + ", ".join(missing))
+if not any(n.startswith("sysroot/usr/include/c++/v1/") for n in names): sys.exit("Gói thiếu libc++ headers")
+if not any(n.startswith("resource/lib/clang/") for n in names): sys.exit("Gói thiếu resource headers của clang")
+print("OK: gói hợp lệ")
+PY
