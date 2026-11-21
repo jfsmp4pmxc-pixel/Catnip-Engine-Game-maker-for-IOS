@@ -324,25 +324,57 @@ extension ProjectListViewController: UITableViewDataSource, UITableViewDelegate 
     }
 }
 
-// MARK: - Cài đặt
+// MARK: - Cài đặt (một trang con)
 
-final class SettingsViewController: UITableViewController {
+final class SettingsPageViewController: UITableViewController {
 
-    private enum Section: Int, CaseIterable {
-        case theme, font, size, editing, markdown, screen, tools
+    enum Section: Int, CaseIterable {
+        case theme, font, size, editing, markdown, screen, shell, cpp
 
         var title: String {
             switch self {
-            case .theme:   return "GIAO DIỆN"
+            case .theme:   return "THEME MÀU"
             case .font:    return "FONT TRONG EDITOR"
             case .size:    return "CỠ CHỮ (2–32 pt)"
             case .editing: return "SOẠN THẢO"
             case .markdown: return "TRÌNH XEM MARKDOWN"
             case .screen:  return "MÀN HÌNH"
-            case .tools:   return "CÔNG CỤ"
+            case .shell:   return "SHELL"
+            case .cpp:     return "C++"
             }
         }
     }
+
+    /// Mỗi trang con của Cài đặt gom vài nhóm hàng.
+    enum Page {
+        case appearance, font, editing, markdown, shell, cpp
+
+        var title: String {
+            switch self {
+            case .appearance: return "Giao diện"
+            case .font:       return "Font và cỡ chữ"
+            case .editing:    return "Soạn thảo"
+            case .markdown:   return "Trình xem Markdown"
+            case .shell:      return "Shell và Linux"
+            case .cpp:        return "C++ (Clang++)"
+            }
+        }
+
+        var sections: [Section] {
+            switch self {
+            case .appearance: return [.theme, .screen]
+            case .font:       return [.font, .size]
+            case .editing:    return [.editing]
+            case .markdown:   return [.markdown]
+            case .shell:      return [.shell]
+            case .cpp:        return [.cpp]
+            }
+        }
+    }
+
+    private let page: Page
+    private var shown: [Section] { page.sections }
+    private func idx(_ list: [Section]) -> IndexSet { IndexSet(list.compactMap { shown.firstIndex(of: $0) }) }
 
     private enum ImportKind { case theme, font }
 
@@ -351,12 +383,12 @@ final class SettingsViewController: UITableViewController {
     private var previewLabel: UILabel?
     private var importKind: ImportKind = .theme
 
-    init() { super.init(style: .insetGrouped) }
+    init(page: Page) { self.page = page; super.init(style: .insetGrouped) }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Cài đặt"
+        title = page.title
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
         navigationController?.navigationBar.prefersLargeTitles = false
@@ -386,20 +418,21 @@ final class SettingsViewController: UITableViewController {
     private var themes: [Theme] { Theme.all }
     private var fonts: [EditorFontInfo] { FontStore.shared.fonts }
 
-    override func numberOfSections(in tableView: UITableView) -> Int { Section.allCases.count }
+    override func numberOfSections(in tableView: UITableView) -> Int { shown.count }
 
     override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
-        Section(rawValue: section)?.title
+        shown[section].title
     }
 
     override func tableView(_ tableView: UITableView, titleForFooterInSection section: Int) -> String? {
-        switch Section(rawValue: section)! {
+        switch shown[section] {
         case .theme:  return "Nhập theme TextMate (.tmTheme). Vuốt trái để sửa hoặc xoá theme."
         case .font:   return "Nhập font .ttf / .otf / .ttc. Font được lưu trong app, vuốt trái để xoá."
         case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật. Soát chính tả tô đỏ tiếng/cụm từ tiếng Việt sai trong file .md (bỏ qua code, link và từ tiếng Anh). \"Hiện file/thư mục ẩn\" cho thấy cả file bắt đầu bằng dấu chấm (như .github, .gitignore) trong cây file; .git và .catnip.json luôn được giấu."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
-        case .tools:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
+        case .cpp:    return "Clang++ được tải về một lần (không nằm trong bản cài). Chạy mã C++ cần app có quyền JIT (TrollStore, hoặc bật JIT qua AltStore/SideStore)."
+        case .shell:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
         default:      return nil
         }
     }
@@ -413,14 +446,15 @@ final class SettingsViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        switch Section(rawValue: section)! {
+        switch shown[section] {
         case .theme:   return themes.count + 2          // + "Nhập theme…" + "Trình sửa theme…"
         case .font:    return 1 + fonts.count + 1       // mặc định + font đã nhập + "Nhập font…"
         case .size:    return 2                         // bộ chỉnh + dòng xem trước
         case .editing: return 6
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
-        case .tools:   return IshAvailability.isEmbedded ? 6 : 5   // bật shell + cỡ chữ shell + loại shell + Clang++ (+ cài lại bộ công cụ) + định cú pháp
+        case .shell:   return IshAvailability.isEmbedded ? 4 : 3   // bật shell + cỡ chữ shell + loại shell (+ cài lại bộ công cụ Linux)
+        case .cpp:     return 1
         }
     }
 
@@ -471,7 +505,7 @@ final class SettingsViewController: UITableViewController {
             cell.imageView?.tintColor = t.accentColor
         }
 
-        switch Section(rawValue: indexPath.section)! {
+        switch shown[indexPath.section] {
         case .theme:
             if indexPath.row == themes.count {
                 importRow("Nhập theme (.tmTheme)…")
@@ -573,7 +607,7 @@ final class SettingsViewController: UITableViewController {
                 self?.settingsChanged()
             }
 
-        case .tools:
+        case .shell:
             if indexPath.row == 0 {
                 switchCell(cell, text: "Cửa sổ shell", isOn: st.shellEnabled) { [weak self] on in
                     SettingsStore.shared.update { $0.shellEnabled = on }
@@ -591,23 +625,18 @@ final class SettingsViewController: UITableViewController {
                 cell.imageView?.image = UIImage(systemName: "terminal")
                 cell.imageView?.tintColor = t.accentColor
                 cell.accessoryType = .disclosureIndicator
-            } else if indexPath.row == 3 {
-                cell.textLabel?.text = "Clang++ (C++): " + (ClangToolchain.isInstalled ? "đã cài" : "chưa cài")
-                cell.imageView?.image = UIImage(systemName: "hammer")
-                cell.imageView?.tintColor = t.accentColor
-                cell.accessoryType = .disclosureIndicator
-            } else if indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1 {
-                cell.textLabel?.text = "Định cú pháp (TextMate)…"
-                cell.textLabel?.textColor = t.accentColor
-                cell.imageView?.image = UIImage(systemName: "chevron.left.forwardslash.chevron.right")
-                cell.imageView?.tintColor = t.accentColor
-                cell.accessoryType = .disclosureIndicator
             } else {
                 cell.textLabel?.text = "Cài lại bộ công cụ Linux…"
                 cell.textLabel?.textColor = t.accentColor
                 cell.imageView?.image = UIImage(systemName: "arrow.down.circle")
                 cell.imageView?.tintColor = t.accentColor
             }
+
+        case .cpp:
+            cell.textLabel?.text = "Clang++: " + (ClangToolchain.isInstalled ? "đã cài (chạm để cài lại/gỡ)" : "chưa cài (chạm để tải)")
+            cell.imageView?.image = UIImage(systemName: "hammer")
+            cell.imageView?.tintColor = t.accentColor
+            cell.accessoryType = .disclosureIndicator
         }
         return cell
     }
@@ -616,7 +645,7 @@ final class SettingsViewController: UITableViewController {
 
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        switch Section(rawValue: indexPath.section)! {
+        switch shown[indexPath.section] {
         case .theme:
             if indexPath.row == themes.count {
                 presentImporter(.theme)
@@ -632,34 +661,32 @@ final class SettingsViewController: UITableViewController {
         case .font:
             if indexPath.row == 0 {
                 SettingsStore.shared.update { $0.fontName = nil }
-                tableView.reloadSections([Section.font.rawValue, Section.size.rawValue], with: .none)
+                tableView.reloadSections(idx([.font, .size]), with: .none)
                 settingsChanged()
             } else if indexPath.row <= fonts.count {
                 let f = fonts[indexPath.row - 1]
                 SettingsStore.shared.update { $0.fontName = f.postScriptName }
-                tableView.reloadSections([Section.font.rawValue, Section.size.rawValue], with: .none)
+                tableView.reloadSections(idx([.font, .size]), with: .none)
                 settingsChanged()
             } else {
                 presentImporter(.font)
             }
-        case .tools where indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1:
-            navigationController?.pushViewController(GrammarsViewController(), animated: true)
-        case .tools where indexPath.row == 2:
+        case .shell where indexPath.row == 2:
             chooseShell(from: tableView.cellForRow(at: indexPath))
-        case .tools where indexPath.row == 3:
+        case .shell where indexPath.row == 3:
+            presentIshSetup()
+        case .cpp:
             let setup = ClangSetupViewController()
             setup.modalPresentationStyle = .fullScreen
             setup.onFinish = { [weak self, weak setup] in
                 setup?.dismiss(animated: true)
-                self?.tableView.reloadSections([Section.tools.rawValue], with: .none)
+                self?.tableView.reloadSections(self?.idx([.cpp]) ?? [], with: .none)
             }
             present(setup, animated: true)
-        case .tools where indexPath.row == 4:
-            presentIshSetup()
         case .markdown where indexPath.row >= 1:
             let keys = ["auto", "githubLight", "githubDark"]
             SettingsStore.shared.update { $0.markdownTheme = keys[indexPath.row - 1] }
-            tableView.reloadSections([Section.markdown.rawValue], with: .none)
+            tableView.reloadSections(idx([.markdown]), with: .none)
             settingsChanged()
         default:
             break
@@ -673,7 +700,7 @@ final class SettingsViewController: UITableViewController {
             #if CATNIP_HAS_ISH
             IshRuntime.shared.restartSession()
             #endif
-            tableView.reloadSections([Section.tools.rawValue], with: .none)
+            tableView.reloadSections(idx([.shell, .cpp]), with: .none)
             settingsChanged()
         }
         sheet.addAction(UIAlertAction(title: "Catnip Shell (dựng sẵn, nhẹ)", style: .default) { _ in set("catnip") })
@@ -729,7 +756,7 @@ final class SettingsViewController: UITableViewController {
             let a = UIContextualAction(style: .destructive, title: "Xoá") { _, _, done in run(); done(true) }
             return UISwipeActionsConfiguration(actions: [a])
         }
-        switch Section(rawValue: indexPath.section)! {
+        switch shown[indexPath.section] {
         case .theme where indexPath.row < themes.count && !themes[indexPath.row].isCustom:
             let target = themes[indexPath.row]
             let edit = UIContextualAction(style: .normal, title: "Sửa") { [weak self] _, _, done in
@@ -775,9 +802,100 @@ final class SettingsViewController: UITableViewController {
     }
 }
 
+// MARK: - Cài đặt (trang gốc: danh sách mục)
+
+final class SettingsViewController: UITableViewController {
+
+    private struct Row {
+        let title: String
+        let symbol: String
+        let summary: () -> String
+        let open: (UINavigationController?) -> Void
+    }
+
+    private var rows: [Row] = []
+
+    init() { super.init(style: .insetGrouped) }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Cài đặt"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
+        func page(_ p: SettingsPageViewController.Page) -> (UINavigationController?) -> Void {
+            { nav in nav?.pushViewController(SettingsPageViewController(page: p), animated: true) }
+        }
+        rows = [
+            Row(title: "Giao diện", symbol: "paintbrush", summary: { Appearance.theme.name }, open: page(.appearance)),
+            Row(title: "Font và cỡ chữ", symbol: "textformat.size", summary: {
+                let name = SettingsStore.shared.settings.fontName.flatMap { n in FontStore.shared.fonts.first { $0.postScriptName == n }?.displayName } ?? "Mặc định"
+                return "\(name) · \(Int(Appearance.fontSize)) pt"
+            }, open: page(.font)),
+            Row(title: "Soạn thảo", symbol: "pencil.and.outline", summary: {
+                let st = SettingsStore.shared.settings
+                return "Tab \(st.tabWidth)" + (st.scrollHorizontal ? " · cuộn ngang" : " · ngắt dòng")
+            }, open: page(.editing)),
+            Row(title: "Trình xem Markdown", symbol: "doc.richtext", summary: { "\(Int(SettingsStore.shared.settings.markdownFontSize)) px" }, open: page(.markdown)),
+            Row(title: "Shell và Linux", symbol: "terminal", summary: {
+                (SettingsStore.shared.settings.shellEnabled ? "Bật · " : "Tắt · ") + ShellChoice.current.displayName
+            }, open: page(.shell)),
+            Row(title: "C++ (Clang++)", symbol: "hammer", summary: { ClangToolchain.isInstalled ? "Đã cài" : "Chưa cài" }, open: page(.cpp)),
+            Row(title: "Định cú pháp (TextMate)", symbol: "chevron.left.forwardslash.chevron.right", summary: {
+                let n = GrammarStore.shared.grammars.count
+                return n == 0 ? "Chưa nhập" : "\(n) ngôn ngữ"
+            }, open: { nav in nav?.pushViewController(GrammarsViewController(), animated: true) }),
+        ]
+        refreshColors()
+        NotificationCenter.default.addObserver(self, selector: #selector(refreshAll), name: .catnipSettingsChanged, object: nil)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        refreshAll()
+    }
+
+    @objc private func refreshAll() {
+        refreshColors()
+        tableView.reloadData()
+    }
+
+    private func refreshColors() {
+        Appearance.style(navigationController)
+        tableView.backgroundColor = Appearance.theme.bgColor
+        tableView.separatorColor = Appearance.theme.borderColor
+    }
+
+    @objc private func doneTapped() { dismiss(animated: true) }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { rows.count }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let t = Appearance.theme
+        let r = rows[indexPath.row]
+        let cell = UITableViewCell(style: .value1, reuseIdentifier: nil)
+        cell.backgroundColor = t.bg2Color
+        cell.textLabel?.text = r.title
+        cell.textLabel?.textColor = t.fgColor
+        cell.textLabel?.font = .systemFont(ofSize: 16)
+        cell.detailTextLabel?.text = r.summary()
+        cell.detailTextLabel?.textColor = t.mutedColor
+        cell.imageView?.image = UIImage(systemName: r.symbol)
+        cell.imageView?.tintColor = t.accentColor
+        cell.accessoryType = .disclosureIndicator
+        let sel = UIView(); sel.backgroundColor = t.hoverColor
+        cell.selectedBackgroundView = sel
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        rows[indexPath.row].open(navigationController)
+    }
+}
+
 // MARK: - Nhận file nhập vào
 
-extension SettingsViewController: UIDocumentPickerDelegate {
+extension SettingsPageViewController: UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first else { return }
         let scoped = url.startAccessingSecurityScopedResource()
