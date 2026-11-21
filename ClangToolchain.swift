@@ -296,9 +296,26 @@ final class CppEngine {
         guard ClangToolchain.isInstalled else {
             throw ToolchainError("Chưa cài Clang++. Vào Cài đặt → Công cụ → Clang++ để tải.")
         }
-        guard let h = dlopen(ClangToolchain.libraryURL.path, RTLD_NOW | RTLD_GLOBAL) else {
-            let why = dlerror().map { String(cString: $0) } ?? "không rõ"
-            throw ToolchainError("Không nạp được Clang (\(why)).\nCần app có quyền JIT / nạp thư viện ngoài (TrollStore, hoặc bật JIT qua AltStore/SideStore).")
+        // Thứ tự: (1) đã được tiêm sẵn vào app (TrollFools) → dlsym thẳng; (2) dylib nằm trong bundle (Frameworks/);
+        // (3) dylib đã giải nén ở Application Support (cần chữ ký hợp lệ).
+        if let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "catnip_clang_run") {   // RTLD_DEFAULT
+            runFn = unsafeBitCast(sym, to: RunFn.self)
+            return
+        }
+        let bundle = Bundle.main
+        var candidates = [String]()
+        if let f = bundle.privateFrameworksPath { candidates.append(f + "/libcatnipclang.dylib") }
+        candidates.append(bundle.bundlePath + "/libcatnipclang.dylib")
+        candidates.append(bundle.bundlePath + "/Frameworks/libcatnipclang.dylib")
+        candidates.append(ClangToolchain.libraryURL.path)
+        var lastErr = "không rõ"
+        var opened: UnsafeMutableRawPointer?
+        for path in candidates where FileManager.default.fileExists(atPath: path) {
+            if let h0 = dlopen(path, RTLD_NOW | RTLD_GLOBAL) { opened = h0; break }
+            lastErr = dlerror().map { String(cString: $0) } ?? lastErr
+        }
+        guard let h = opened else {
+            throw ToolchainError("Không nạp được Clang (\(lastErr)).\nDylib tải về phải có chữ ký hợp lệ: hãy tiêm libcatnipclang.dylib, libclang-cpp.dylib, libLLVM.dylib vào app bằng TrollFools (hoặc đặt trong Frameworks của IPA).")
         }
         guard let sym = dlsym(h, "catnip_clang_run") else {
             dlclose(h)
