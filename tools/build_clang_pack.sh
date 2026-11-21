@@ -70,6 +70,11 @@ xcrun --sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=15.0 -isysroot "
   -o "$OUT/pack/lib/libcatnipclang.dylib"
 cp -L "$OUT/build-ios/lib/"libLLVM*.dylib "$OUT/build-ios/lib/"libclang-cpp*.dylib "$OUT/pack/lib/"
 xcrun strip -x "$OUT/pack/lib/"*.dylib || true
+# iOS chỉ nạp dylib có chữ ký (ít nhất ad-hoc). strip làm mất chữ ký nên ký lại SAU strip.
+for f in "$OUT/pack/lib/"*.dylib; do
+  codesign --force --sign - "$f"
+  codesign --verify --verbose=1 "$f"
+done
 ls -lh "$OUT/pack/lib"
 
 # 4) Header: resource của clang, sysroot iOS (usr/include có cả libc++), SDL3.
