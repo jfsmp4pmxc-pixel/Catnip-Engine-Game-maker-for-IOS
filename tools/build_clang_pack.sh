@@ -37,7 +37,7 @@ cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" $LAUNCHER \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
   -DLLVM_HOST_TRIPLE=arm64-apple-ios15.0 \
   -DCMAKE_INSTALL_PREFIX="$OUT/install" \
-  -DLLVM_ENABLE_PROJECTS="clang" \
+  -DLLVM_ENABLE_PROJECTS="clang" -DLLVM_ENABLE_ASSERTIONS=ON \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_DEFAULT_TARGET_TRIPLE="arm64-apple-ios15.0" \
   -DLLVM_NATIVE_TOOL_DIR="$OUT/build-host/bin" \
   -DLLVM_TABLEGEN="$OUT/build-host/bin/llvm-tblgen" -DCLANG_TABLEGEN="$OUT/build-host/bin/clang-tblgen" \
