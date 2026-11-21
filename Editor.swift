@@ -514,7 +514,10 @@ final class EditorViewController: UIViewController {
     // MARK: Số dòng + xuống dòng (theo settings)
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        if !SettingsStore.shared.settings.scrollHorizontal { applyWrapWidth() }
+        if SettingsStore.shared.settings.scrollHorizontal {
+            let avail = textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right
+            if avail > 0, textView.textContainer.size.width < avail { updateScrollExtent() }
+        } else { applyWrapWidth() }
         gutter.setNeedsDisplay()
     }
 
@@ -539,6 +542,7 @@ final class EditorViewController: UIViewController {
             applyWrapWidth()
         }
         textView.alwaysBounceHorizontal = st.scrollHorizontal
+        textView.showsHorizontalScrollIndicator = st.scrollHorizontal
 
         gutter.isHidden = !st.showLineNumbers
         gutter.font = Appearance.codeFont(max(Appearance.fontSize - 2, 2))
@@ -586,6 +590,21 @@ final class EditorViewController: UIViewController {
             spellIssues = VietnameseSpell.apply(to: textView.textStorage)
         }
         textView.typingAttributes = [.font: font, .foregroundColor: t.fgColor]
+        updateScrollExtent()
+    }
+
+    /// Cuộn ngang (mọi file): bề rộng vùng chữ = dòng dài nhất (tối thiểu bằng khung nhìn), để cuộn vừa đủ thay vì một dải rộng 10 000 pt.
+    func updateScrollExtent() {
+        guard SettingsStore.shared.settings.scrollHorizontal else { return }
+        let tc = textView.textContainer
+        let avail = textView.bounds.width - textView.textContainerInset.left - textView.textContainerInset.right
+        var w: CGFloat = 10_000
+        if textView.textStorage.length <= 300_000 {
+            textView.layoutManager.ensureLayout(for: tc)
+            let used = textView.layoutManager.usedRect(for: tc).width
+            w = max(used + tc.lineFragmentPadding * 2 + 24, avail, 1)
+        }
+        if abs(tc.size.width - w) > 0.5 { tc.size = CGSize(width: w, height: CGFloat.greatestFiniteMagnitude) }
     }
 
     // MARK: Language menu

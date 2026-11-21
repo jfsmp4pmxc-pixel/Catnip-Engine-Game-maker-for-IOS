@@ -15,7 +15,7 @@ with_love = env("WITH_LOVE") == "true"
 with_ish = env("WITH_ISH") == "true"
 
 sources = ["main.swift", "Models.swift", "Storage.swift", "UI.swift", "Editor.swift", "EditorSidebar.swift",
-           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift"]
+           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift"]
 resources = ["Resources"]
 ldflags = ["$(inherited)"]
 header_paths = ["$(inherited)"]

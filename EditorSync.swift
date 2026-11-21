@@ -206,6 +206,7 @@ extension EditorViewController {
                 item("Chạy workflow…", "play.circle", .workflows),
                 item("Tình trạng workflows", "list.bullet.rectangle", .runs),
             ]),
+            group([item("Releases (đăng, sửa, xoá)…", "shippingbox", .releases)]),
             group([
                 item("Đổi tên repo…", "pencil", .renameRepo),
                 item("Xoá repo…", "trash", .deleteRepo, destructive: true),

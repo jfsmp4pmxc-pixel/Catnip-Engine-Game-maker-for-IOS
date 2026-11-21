@@ -69,7 +69,7 @@ private let relativeFormatter: RelativeDateTimeFormatter = {
 // MARK: - Màn hình chính
 
 /// Việc cần làm ngay khi mở màn hình (từ mục "Công cụ" trong menu ⋯ của editor).
-enum GitHubAction { case screen, pull, push, changeBranch, renameRepo, deleteRepo, workflows, runs }
+enum GitHubAction { case screen, pull, push, changeBranch, renameRepo, deleteRepo, workflows, runs, releases }
 
 final class GitHubViewController: UITableViewController {
     private struct Item {
@@ -123,6 +123,7 @@ final class GitHubViewController: UITableViewController {
         case .screen: break
         case .workflows: openWorkflows()
         case .runs: openRuns()
+        case .releases: openReleases()
         case .pull: doPull(overwrite: false)
         case .push: choosePushItems()
         case .changeBranch: changeBranch()
@@ -179,6 +180,9 @@ final class GitHubViewController: UITableViewController {
                 s.append(Section(header: "Workflows", footer: "Muốn chạy thủ công, workflow phải có “on: workflow_dispatch” và đã nằm trên GitHub (nhớ Push trước).", items: [
                     Item(title: "Chạy workflow", icon: "play.circle", chevron: true) { [weak self] in self?.openWorkflows() },
                     Item(title: "Tình trạng workflows", icon: "list.bullet.rectangle", chevron: true) { [weak self] in self?.openRuns() },
+                ]))
+                s.append(Section(header: "Releases", footer: "Đăng release mới kèm file, sửa hoặc xoá release (và tag).", items: [
+                    Item(title: "Quản lý releases", icon: "shippingbox", chevron: true) { [weak self] in self?.openReleases() },
                 ]))
             } else {
                 s.append(Section(header: "Repo của dự án “\(project)”", footer: status.isEmpty ? "Dự án chưa gắn với repo nào." : status, items: [
@@ -528,6 +532,10 @@ final class GitHubViewController: UITableViewController {
     private func openWorkflows() {
         guard let l = link else { return }
         navigationController?.pushViewController(GitHubWorkflowsViewController(repo: l.repo, branch: l.branch), animated: true)
+    }
+    private func openReleases() {
+        guard let l = link else { return }
+        navigationController?.pushViewController(GitHubReleasesViewController(repo: l.repo, branch: l.branch), animated: true)
     }
     private func openRuns() {
         guard let l = link else { return }
