@@ -135,7 +135,7 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
                     } else {
                         let libs = files.filter { $0.hasPrefix("lib/") }.prefix(8).joined(separator: ", ")
                         let sample = files.prefix(6).joined(separator: ", ")
-                        throw ToolchainError("Gói Clang thiếu lib/libcatnipclang.dylib. Đã giải nén \(files.count) file. Trong lib/: [\(libs)]. Mẫu: [\(sample)].")
+                        throw ToolchainError("Gói Clang thiếu lib/libcatnipclang.dylib (tar \((try? fm.attributesOfItem(atPath: tar.path)[.size]) ?? 0) byte). Đã giải nén \(files.count) file. Trong lib/: [\(libs)]. Mẫu: [\(sample)].")
                     }
                 }
                 CppEngine.shared.unload()
@@ -157,51 +157,17 @@ private final class ClangInstaller: NSObject, URLSessionDownloadDelegate {
     // MARK: Giải nén (deflate thô → tar → file)
 
     static func inflate(_ src: URL, to dst: URL, progress: (Double) -> Void) throws {
-        let fm = FileManager.default
-        fm.createFile(atPath: dst.path, contents: nil)
-        let input = try FileHandle(forReadingFrom: src)
-        let output = try FileHandle(forWritingTo: dst)
-        defer { try? input.close(); try? output.close() }
-        let total = Double((try? src.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 1)
-        let bufSize = 1 << 20
-        let outBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: bufSize)
-        let dummy = UnsafeMutablePointer<UInt8>.allocate(capacity: 1)
-        defer { outBuf.deallocate(); dummy.deallocate() }
-
-        var stream = compression_stream(dst_ptr: outBuf, dst_size: bufSize, src_ptr: UnsafePointer(dummy), src_size: 0, state: nil)
-        guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_ZLIB) == COMPRESSION_STATUS_OK else {
-            throw ToolchainError("Không khởi tạo được bộ giải nén.")
-        }
-        defer { compression_stream_destroy(&stream) }
-
-        var read = 0.0
-        var ended = false
-        while !ended {
-            let chunk = try input.read(upToCount: bufSize) ?? Data()
-            let eof = chunk.isEmpty
-            read += Double(chunk.count)
-            progress(min(read / max(total, 1), 1))
-            try chunk.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
-                stream.src_ptr = raw.bindMemory(to: UInt8.self).baseAddress ?? UnsafePointer(dummy)
-                stream.src_size = chunk.count
-                var spins = 0
-                while true {
-                    let flags: Int32 = eof ? Int32(COMPRESSION_STREAM_FINALIZE.rawValue) : 0
-                    let status = compression_stream_process(&stream, flags)
-                    if status == COMPRESSION_STATUS_ERROR { throw ToolchainError("Gói Clang bị lỗi (giải nén thất bại).") }
-                    let produced = bufSize - stream.dst_size
-                    if produced > 0 {
-                        try output.write(contentsOf: Data(bytes: outBuf, count: produced))
-                        stream.dst_ptr = outBuf
-                        stream.dst_size = bufSize
-                        spins = 0
-                    } else { spins += 1 }
-                    if status == COMPRESSION_STATUS_END { ended = true; break }
-                    if !eof && stream.src_size == 0 && produced < bufSize { break }
-                    if eof && spins > 3 { ended = true; break }
-                }
-            }
-        }
+        // NSData.decompressed(.zlib) = deflate thô (giống Python zlib wbits=-15); đơn giản và chắc hơn vòng lặp compression_stream.
+        let packed = try Data(contentsOf: src, options: .alwaysMapped)
+        guard packed.count > 0 else { throw ToolchainError("File tải về rỗng (0 byte).") }
+        progress(0.1)
+        let out: NSData
+        do { out = try (packed as NSData).decompressed(using: .zlib) }
+        catch { throw ToolchainError("Giải nén thất bại (gói \(packed.count) byte): \(error.localizedDescription)") }
+        progress(0.8)
+        guard out.length >= 512 else { throw ToolchainError("Giải nén ra \(out.length) byte (gói \(packed.count) byte, 4 byte đầu: \(packed.prefix(4).map { String(format: "%02x", $0) }.joined())).") }
+        try out.write(to: dst, options: .atomic)
+        progress(1)
     }
 
     private static func octal(_ d: Data) -> Int {
