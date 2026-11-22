@@ -218,7 +218,8 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .scratch: return "Dự án bình thường, tự do tạo file"
         case .ui:      return "Giao diện SwiftUI, xem trước tương tác được"
         case .cpp:     return "C++ chạy bằng Clang++ trong app (CLI, console, SDL3)"
-        case .python, .twoObj, .catnip: return "Sắp ra mắt"
+        case .python:  return "Python chạy trong shell iSH (CLI); đồ hoạ native đang làm"
+        case .twoObj, .catnip: return "Sắp ra mắt"
         }
     }
 
@@ -235,9 +236,9 @@ enum ProjectKind: String, Codable, CaseIterable {
     }
 
     /// Chỉ LÖVE và dự án thường dùng được; các loại còn lại là "coming soon".
-    var isAvailable: Bool { self == .love || self == .scratch || self == .ui || self == .cpp }
+    var isAvailable: Bool { self == .love || self == .scratch || self == .ui || self == .cpp || self == .python }
     /// Chỉ dự án LÖVE mới có nút Chạy.
-    var canRun: Bool { self == .love || self == .cpp }
+    var canRun: Bool { self == .love || self == .cpp || self == .python }
     /// Dự án UI có nút Preview (thay cho Chạy).
     var canPreview: Bool { self == .ui }
 }
@@ -256,6 +257,14 @@ enum CppTemplate {
         std::cout << "Xin chào, " << name << "!\\n";
         return 0;
     }
+    """
+}
+
+enum PythonTemplate {
+    static let main = """
+    # Dự án Python — bấm Chạy để chạy main.py trong shell.
+    name = input("Tên bạn là gì? ")
+    print(f"Xin chào, {name}!")
     """
 }
 
@@ -332,7 +341,9 @@ final class ProjectStore {
                 try UIPreviewTemplate.contentView.write(to: url.appendingPathComponent("ContentView.swift"), atomically: true, encoding: .utf8)
             case .cpp:
                 try CppTemplate.main.write(to: url.appendingPathComponent("main.cpp"), atomically: true, encoding: .utf8)
-            case .python, .twoObj, .catnip:
+            case .python:
+                try PythonTemplate.main.write(to: url.appendingPathComponent("main.py"), atomically: true, encoding: .utf8)
+            case .twoObj, .catnip:
                 break
             }
         } catch {

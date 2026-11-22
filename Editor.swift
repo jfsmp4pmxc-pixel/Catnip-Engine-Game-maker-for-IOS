@@ -461,6 +461,20 @@ final class EditorViewController: UIViewController {
     }
     #endif
 
+    /// Chạy main.py bằng python3 trong iSH (CLI tương tác). CPython nhúng native + đồ hoạ: bước sau.
+    private func runPython() {
+        guard flushSave() else { return }
+        #if CATNIP_HAS_ISH
+        textView.resignFirstResponder()
+        let cmd = "clear; if ! command -v python3 >/dev/null 2>&1; then echo 'Chưa có python3. Chạy: apk add python3'; "
+            + "else python3 main.py; echo \"[Thoát mã $?]\"; fi"
+        IshRuntime.shared.runCommand(cmd, in: project)
+        topPresenter.present(CatnipNavigationController(rootViewController: IshShellViewController()), animated: true)
+        #else
+        flash("⚠️ Bản build này chưa nhúng iSH để chạy Python")
+        #endif
+    }
+
     /// Chạy dự án C++ bằng Clang++ (JIT) và mở console tương tác.
     private func runCpp() {
         guard !CppEngine.shared.running, flushSave() else { return }
@@ -487,6 +501,7 @@ final class EditorViewController: UIViewController {
     /// Trong lúc chạy có cửa sổ nổi với nút Log / Thoát; log của game được lưu vào GameLog.
     @objc private func runTapped() {
         if kind == .cpp { runCpp(); return }
+        if kind == .python { runPython(); return }
         guard !isGameRunning, flushSave() else { return }
         #if CATNIP_HAS_LOVE
         guard store.read(project: project, path: "main.lua") != nil else {
