@@ -25,6 +25,8 @@ static const char *kPrelude =
 "    sys.argv = [path]\n"
 "    try:\n"
 "        sys.stdin = open(0, 'r', encoding='utf-8', closefd=False)\n"
+"        sys.stdout = io.TextIOWrapper(io.FileIO(1, 'w', closefd=False), encoding='utf-8', write_through=True)\n"
+"        sys.stderr = io.TextIOWrapper(io.FileIO(2, 'w', closefd=False), encoding='utf-8', write_through=True)\n"
 "    except Exception:\n"
 "        pass\n"
 "    try:\n"
@@ -84,9 +86,7 @@ static BOOL InitPython(void) {
     cfg.buffered_stdio = 0;
     cfg.write_bytecode = 0;
     cfg.install_signal_handlers = 0;
-#ifdef __APPLE__
-    cfg.use_system_logger = 0;          // stdout/stderr đi thẳng vào fd 1/2 (console của Catnip), không vào os_log
-#endif
+    // (CPython 3.13 chưa có cfg.use_system_logger; stdout/stderr được nối lại vào fd 1/2 ở _catnip_run.)
     st = PyConfig_SetBytesString(&cfg, &cfg.home, home.fileSystemRepresentation);
     if (PyStatus_Exception(st)) { gInitError = [@"home: " stringByAppendingString:PyStatusMessage(st)]; PyConfig_Clear(&cfg); return NO; }
     cfg.module_search_paths_set = 1;
