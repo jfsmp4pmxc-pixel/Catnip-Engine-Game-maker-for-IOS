@@ -18,7 +18,12 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/TargetSelect.h"
 
+#include <csignal>
+#include <cstdlib>
 #include <cstdio>
+#include <execinfo.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -34,6 +39,31 @@ static std::vector<std::string> splitLines(const char *s) {
   return out;
 }
 
+// Nhật ký từng bước ghi thẳng vào file (không qua stdio) để còn đọc được khi app sập; xem trong app Tệp:
+// Catnip/catnip-clang-trace.log (thư mục Documents của app). Khi nhận SIGSEGV/SIGABRT/SIGBUS/SIGILL cũng ghi tên tín hiệu và backtrace.
+static int gTraceFd = -1;
+
+static void trace(const char *msg) {
+  if (gTraceFd < 0) return;
+  (void)!write(gTraceFd, msg, strlen(msg));
+  (void)!write(gTraceFd, "\n", 1);
+  fsync(gTraceFd);
+}
+
+static void crashHandler(int sig) {
+  char buf[64];
+  int n = std::snprintf(buf, sizeof buf, "!!! TIN HIEU %d\n", sig);
+  if (gTraceFd >= 0) {
+    (void)!write(gTraceFd, buf, (size_t)n);
+    void *frames[48];
+    int cnt = backtrace(frames, 48);
+    backtrace_symbols_fd(frames, cnt, gTraceFd);
+    fsync(gTraceFd);
+  }
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
 static void setErr(char *err, int errlen, const std::string &msg) {
   if (!err || errlen <= 0) return;
   std::snprintf(err, (size_t)errlen, "%s", msg.c_str());
@@ -42,6 +72,13 @@ static void setErr(char *err, int errlen, const std::string &msg) {
 extern "C" __attribute__((visibility("default")))
 int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *flags_nl,
                      const char *sources_nl, char *err, int errlen) {
+  {
+    const char *home = getenv("HOME");
+    std::string path = std::string(home ? home : ".") + "/Documents/catnip-clang-trace.log";
+    gTraceFd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    for (int sg : {SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGTRAP}) signal(sg, crashHandler);
+    trace("[1] catnip_clang_run bat dau");
+  }
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
 
@@ -60,9 +97,11 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
 
   // Không dùng clang::Interpreter (clang-repl bị crash null CurContext trong Sema trên iOS):
   // biên dịch từng file bằng CompilerInstance + EmitLLVMOnlyAction rồi nạp vào LLJIT.
+  trace("[2] chuan bi tao CompilerInstance");
   clang::IncrementalCompilerBuilder CB;     // chỉ để dựng CompilerInstance C++ đã cấu hình sẵn (driver, target, diagnostics)
   CB.SetCompilerArgs(args);
 
+  trace("[3] tao LLJIT");
   auto JIT = llvm::orc::LLJITBuilder().create();
   if (!JIT) { setErr(err, errlen, llvm::toString(JIT.takeError())); return -1; }
   auto &JD = (*JIT)->getMainJITDylib();
@@ -71,6 +110,7 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
   JD.addGenerator(std::move(*Gen));
 
   for (auto &src : sources) {
+    trace(("[4] CreateCpp cho " + src).c_str());
     auto CI = CB.CreateCpp();
     if (!CI) { setErr(err, errlen, llvm::toString(CI.takeError())); return -1; }
     auto &FOpts = (*CI)->getFrontendOpts();
@@ -79,10 +119,12 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
     auto Ctx = std::make_unique<llvm::LLVMContext>();
     std::unique_ptr<llvm::Module> Mod;
     {
+      trace("[5] ExecuteAction (parse + sinh IR)");
       clang::EmitLLVMOnlyAction Act(Ctx.get());
       if (!(*CI)->ExecuteAction(Act)) { setErr(err, errlen, "Biên dịch lỗi: " + src); return -1; }
       Mod = Act.takeModule();
     }
+    trace("[6] da sinh IR, them vao JIT");
     if (!Mod) { setErr(err, errlen, "Không sinh được module cho " + src); return -1; }
     if (auto E = (*JIT)->addIRModule(llvm::orc::ThreadSafeModule(std::move(Mod), std::move(Ctx)))) {
       setErr(err, errlen, llvm::toString(std::move(E)));
@@ -90,6 +132,7 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
     }
   }
 
+  trace("[7] initialize + lookup main");
   if (auto E = (*JIT)->initialize(JD)) { setErr(err, errlen, llvm::toString(std::move(E))); return -1; }
   auto Addr = (*JIT)->lookup("main");
   if (!Addr) { setErr(err, errlen, "Không tìm thấy hàm main(): " + llvm::toString(Addr.takeError())); return -1; }
@@ -97,7 +140,9 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
   auto Main = Addr->toPtr<MainFn>();
   char arg0[] = "catnip";
   char *argv[] = {arg0, nullptr};
+  trace("[8] goi main()");
   int rc = Main(1, argv);
+  trace("[9] main() xong");
   std::fflush(nullptr);
   (void)(*JIT)->deinitialize(JD);
   return rc;
