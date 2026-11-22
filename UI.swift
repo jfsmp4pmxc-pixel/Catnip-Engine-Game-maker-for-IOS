@@ -356,7 +356,7 @@ final class SettingsPageViewController: UITableViewController {
             case .editing:    return "Soạn thảo"
             case .markdown:   return "Trình xem Markdown"
             case .shell:      return "Shell và Linux"
-            case .cpp:        return "C++ (Clang++)"
+            case .cpp:        return "C++"
             }
         }
 
@@ -431,7 +431,7 @@ final class SettingsPageViewController: UITableViewController {
         case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật. Soát chính tả tô đỏ tiếng/cụm từ tiếng Việt sai trong file .md (bỏ qua code, link và từ tiếng Anh). \"Hiện file/thư mục ẩn\" cho thấy cả file bắt đầu bằng dấu chấm (như .github, .gitignore) trong cây file; .git và .catnip.json luôn được giấu."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
-        case .cpp:    return "Clang++ được tải về một lần (không nằm trong bản cài). Chạy mã C++ cần app có quyền JIT (TrollStore, hoặc bật JIT qua AltStore/SideStore)."
+        case .cpp:    return "Mặc định nút Chạy dùng g++ trong iSH (cần đã cài g++ ở bước cài môi trường Linux). Clang++ (JIT, thử nghiệm) tải về một lần và cần app có quyền JIT."
         case .shell:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
         default:      return nil
         }
@@ -454,7 +454,7 @@ final class SettingsPageViewController: UITableViewController {
         case .markdown: return 4                        // cỡ chữ + 3 kiểu hiển thị
         case .screen:  return 1
         case .shell:   return IshAvailability.isEmbedded ? 4 : 3   // bật shell + cỡ chữ shell + loại shell (+ cài lại bộ công cụ Linux)
-        case .cpp:     return 1
+        case .cpp:     return 2
         }
     }
 
@@ -632,6 +632,11 @@ final class SettingsPageViewController: UITableViewController {
                 cell.imageView?.tintColor = t.accentColor
             }
 
+        case .cpp where indexPath.row == 0:
+            cell.textLabel?.text = "Chạy bằng: " + (SettingsStore.shared.settings.cppEngine == "clang" ? "Clang++ (JIT, thử nghiệm)" : "g++ trong iSH")
+            cell.imageView?.image = UIImage(systemName: "play.rectangle")
+            cell.imageView?.tintColor = t.accentColor
+            cell.accessoryType = .disclosureIndicator
         case .cpp:
             cell.textLabel?.text = "Clang++: " + (ClangToolchain.isInstalled ? "đã cài (chạm để cài lại/gỡ)" : "chưa cài (chạm để tải)")
             cell.imageView?.image = UIImage(systemName: "hammer")
@@ -675,6 +680,17 @@ final class SettingsPageViewController: UITableViewController {
             chooseShell(from: tableView.cellForRow(at: indexPath))
         case .shell where indexPath.row == 3:
             presentIshSetup()
+        case .cpp where indexPath.row == 0:
+            let sheet = UIAlertController(title: "Chạy C++ bằng", message: "g++ chạy trong iSH (giả lập, ổn định). Clang++ chạy native bằng JIT nhưng còn thử nghiệm.", preferredStyle: .actionSheet)
+            for (title, key) in [("g++ trong iSH", "gpp"), ("Clang++ (JIT, thử nghiệm)", "clang")] {
+                sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                    SettingsStore.shared.update { $0.cppEngine = key }
+                    self?.tableView.reloadSections(self?.idx([.cpp]) ?? [], with: .none)
+                })
+            }
+            sheet.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+            sheet.popoverPresentationController?.sourceView = tableView.cellForRow(at: indexPath)
+            present(sheet, animated: true)
         case .cpp:
             let setup = ClangSetupViewController()
             setup.modalPresentationStyle = .fullScreen

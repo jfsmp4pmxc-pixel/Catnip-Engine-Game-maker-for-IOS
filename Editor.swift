@@ -448,9 +448,28 @@ final class EditorViewController: UIViewController {
         present(nav, animated: true)
     }
 
+    #if CATNIP_HAS_ISH
+    /// Chạy dự án C++ bằng g++ trong iSH: gõ lệnh biên dịch + chạy vào shell rồi mở terminal (có stdin tương tác).
+    private func runCppWithGpp() {
+        textView.resignFirstResponder()
+        let cmd = "clear; if ! command -v g++ >/dev/null 2>&1; then echo 'Chưa có g++. Chạy: apk add g++'; "
+            + "else g++ -std=c++17 -O1 $(find . -name '*.cpp' -not -path './.*') -o /tmp/catnip_app && /tmp/catnip_app; "
+            + "echo \"[Thoát mã $?]\"; fi"
+        IshRuntime.shared.runCommand(cmd, in: project)
+        let vc = IshShellViewController()
+        topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
+    }
+    #endif
+
     /// Chạy dự án C++ bằng Clang++ (JIT) và mở console tương tác.
     private func runCpp() {
         guard !CppEngine.shared.running, flushSave() else { return }
+        #if CATNIP_HAS_ISH
+        if SettingsStore.shared.settings.cppEngine != "clang" || !ClangToolchain.isInstalled {
+            runCppWithGpp()
+            return
+        }
+        #endif
         guard ClangToolchain.isInstalled else {
             textView.resignFirstResponder()
             let setup = ClangSetupViewController()

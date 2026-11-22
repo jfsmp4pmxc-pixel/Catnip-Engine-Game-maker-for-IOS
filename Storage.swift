@@ -114,6 +114,7 @@ struct AppSettings: Codable {
     var showHiddenFiles: Bool = false   // hiện file/thư mục ẩn (tên bắt đầu bằng dấu chấm) trong cây file
     var spellCheckMarkdown: Bool = true // soát lỗi chính tả tiếng Việt trong file Markdown (tô đỏ)
     var clangSetupDone: Bool = false    // đã qua bước tải Clang++ ở setup (cài xong hoặc bỏ qua)
+    var cppEngine: String = "gpp"       // "gpp" = g++ trong iSH (mặc định), "clang" = Clang++ JIT thử nghiệm
     var clangPackURL: String = ""       // địa chỉ gói Clang tuỳ chỉnh; rỗng = release clang-toolchain của repo
     var ishSetupDone: Bool = false      // đã qua màn hình cài môi trường Linux lần đầu (cài xong hoặc bỏ qua)
 
@@ -144,6 +145,7 @@ struct AppSettings: Codable {
         spellCheckMarkdown = try c.decodeIfPresent(Bool.self, forKey: .spellCheckMarkdown) ?? true
         clangSetupDone  = try c.decodeIfPresent(Bool.self, forKey: .clangSetupDone) ?? false
         clangPackURL    = try c.decodeIfPresent(String.self, forKey: .clangPackURL) ?? ""
+        cppEngine       = try c.decodeIfPresent(String.self, forKey: .cppEngine) ?? "gpp"
         ishSetupDone    = try c.decodeIfPresent(Bool.self, forKey: .ishSetupDone) ?? false
     }
 }

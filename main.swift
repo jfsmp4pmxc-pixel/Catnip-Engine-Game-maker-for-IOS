@@ -105,7 +105,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     /// Bước setup tiếp theo: tải Clang++ (có thể bỏ qua) rồi vào màn hình chính.
     private func afterIshSetup(animated: Bool) {
         guard let w = window else { return }
-        if !SettingsStore.shared.settings.clangSetupDone && !ClangToolchain.isInstalled {
+        if SettingsStore.shared.settings.cppEngine == "clang" && !SettingsStore.shared.settings.clangSetupDone && !ClangToolchain.isInstalled {
             let setup = ClangSetupViewController()
             setup.onFinish = { [weak self] in self?.showMain(animated: true) }
             w.rootViewController = setup

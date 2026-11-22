@@ -275,6 +275,28 @@ final class IshRuntime: NSObject, TerminalViewDelegate {
         }
     }
 
+    /// Gõ một lệnh vào shell của dự án (vd. biên dịch rồi chạy C++). Nếu phiên chưa sẵn sàng thì chờ rồi gõ.
+    func runCommand(_ command: String, in project: String) {
+        pendingCommand = command + "\n"
+        openProject(project)
+        flushPendingCommand()
+    }
+
+    private var pendingCommand: String?
+
+    private func flushPendingCommand() {
+        guard let cmd = pendingCommand else { return }
+        guard case .running = state, !switchingProject, sessionProject == desiredProject else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.flushPendingCommand() }
+            return
+        }
+        pendingCommand = nil
+        // Chờ shell in prompt rồi mới gõ để lệnh không bị mất.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            IshBridge.sendInput(Data(cmd.utf8))
+        }
+    }
+
     /// Mở lại phiên shell (sau khi đổi lệnh shell tuỳ chỉnh).
     func restartSession() {
         if case .running = state {
