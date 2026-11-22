@@ -175,6 +175,9 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
   int rc = Main(1, argv);
   trace("[9] main() xong");
   std::fflush(nullptr);
-  (void)(*JIT)->deinitialize(JD);
+  // KHÔNG deinitialize/giải phóng JIT: hàm huỷ (atexit) do mã JIT đăng ký (iostream...) có thể còn
+  // trỏ vào vùng nhớ JIT; giải phóng rồi mà host gọi lại sẽ sập cả app. Chấp nhận rò rỉ vùng nhớ nhỏ.
+  (void)(*JIT).release();
+  trace("[10] xong, tra ve");
   return rc;
 }
