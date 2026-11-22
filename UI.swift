@@ -431,7 +431,7 @@ final class SettingsPageViewController: UITableViewController {
         case .editing: return "Kích thước tab: số dấu cách cho mỗi lần bấm phím Tab và mỗi mức thụt lề tự động. Bật \"Thụt lề bằng ký tự Tab\" để dùng ký tự Tab thật. Soát chính tả tô đỏ tiếng/cụm từ tiếng Việt sai trong file .md (bỏ qua code, link và từ tiếng Anh). \"Hiện file/thư mục ẩn\" cho thấy cả file bắt đầu bằng dấu chấm (như .github, .gitignore) trong cây file; .git và .catnip.json luôn được giấu."
         case .markdown: return "\"Theo giao diện app\" dùng sáng/tối theo theme của editor; GitHub Sáng và GitHub Tối cố định kiểu hiển thị."
         case .screen: return "Bật để màn hình và bàn phím luôn ở chiều dọc. Game LÖVE vẫn tự chọn hướng của nó."
-        case .cpp:    return "Mặc định nút Chạy dùng g++ trong iSH (cần đã cài g++ ở bước cài môi trường Linux). Clang++ (JIT, thử nghiệm) tải về một lần và cần app có quyền JIT."
+        case .cpp:    return "Mặc định nút Chạy dùng Clang++ native (JIT): tải một lần, cần app có quyền JIT. Có thể chuyển sang g++ trong iSH làm dự phòng."
         case .shell:  return "Hiện nút shell ở danh sách dự án và trong menu ⋯ của editor. Mỗi dự án nằm ở /root/<tên dự án> trong shell (khoảng trắng đổi thành _); mở dự án thì shell tự vào thư mục đó. Cài lại bộ công cụ chạy lại apk add bash vim python3 g++ nasm."
         default:      return nil
         }
@@ -633,7 +633,7 @@ final class SettingsPageViewController: UITableViewController {
             }
 
         case .cpp where indexPath.row == 0:
-            cell.textLabel?.text = "Chạy bằng: " + (SettingsStore.shared.settings.cppEngine == "clang" ? "Clang++ (JIT, thử nghiệm)" : "g++ trong iSH")
+            cell.textLabel?.text = "Chạy bằng: " + (SettingsStore.shared.settings.cppEngine == "gpp" ? "g++ trong iSH (dự phòng)" : "Clang++ native (JIT)")
             cell.imageView?.image = UIImage(systemName: "play.rectangle")
             cell.imageView?.tintColor = t.accentColor
             cell.accessoryType = .disclosureIndicator
@@ -681,8 +681,8 @@ final class SettingsPageViewController: UITableViewController {
         case .shell where indexPath.row == 3:
             presentIshSetup()
         case .cpp where indexPath.row == 0:
-            let sheet = UIAlertController(title: "Chạy C++ bằng", message: "g++ chạy trong iSH (giả lập, ổn định). Clang++ chạy native bằng JIT nhưng còn thử nghiệm.", preferredStyle: .actionSheet)
-            for (title, key) in [("g++ trong iSH", "gpp"), ("Clang++ (JIT, thử nghiệm)", "clang")] {
+            let sheet = UIAlertController(title: "Chạy C++ bằng", message: "Clang++ chạy native bằng JIT (mặc định, đang hoàn thiện). g++ trong iSH là phương án dự phòng, chạy giả lập.", preferredStyle: .actionSheet)
+            for (title, key) in [("Clang++ native (JIT)", "clang"), ("g++ trong iSH (dự phòng)", "gpp")] {
                 sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
                     SettingsStore.shared.update { $0.cppEngine = key }
                     self?.tableView.reloadSections(self?.idx([.cpp]) ?? [], with: .none)

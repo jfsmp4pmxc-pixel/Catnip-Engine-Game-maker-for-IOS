@@ -465,7 +465,7 @@ final class EditorViewController: UIViewController {
     private func runCpp() {
         guard !CppEngine.shared.running, flushSave() else { return }
         #if CATNIP_HAS_ISH
-        if SettingsStore.shared.settings.cppEngine != "clang" || !ClangToolchain.isInstalled {
+        if SettingsStore.shared.settings.cppEngine == "gpp" {
             runCppWithGpp()
             return
         }
