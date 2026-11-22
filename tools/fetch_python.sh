@@ -19,4 +19,4 @@ tar -xzf "$OUT/support.tar.gz" -C "$OUT"
 rm -f "$OUT/support.tar.gz"
 test -d "$OUT/Python.xcframework" || { echo "❌ Thiếu Python.xcframework sau khi giải nén:"; ls -la "$OUT"; exit 1; }
 echo "== Cấu trúc Python.xcframework"
-find "$OUT/Python.xcframework" -maxdepth 3 | head -40
+find "$OUT/Python.xcframework" -maxdepth 3 -not -name "*.py" | sed -n 1,60p

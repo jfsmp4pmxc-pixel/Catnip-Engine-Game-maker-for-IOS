@@ -8,8 +8,8 @@ XC="$SUP/Python.xcframework"
 test -d "$XC" || { echo "❌ Không có $XC"; exit 1; }
 
 # Thư viện chuẩn: thư mục lib/python3.X có os.py (chung cho mọi slice).
-OSPY=$(find "$XC" -path '*/lib/python3*/os.py' -not -path '*simulator*' | head -1)
-[ -n "$OSPY" ] || OSPY=$(find "$XC" -path '*/lib/python3*/os.py' | head -1)
+OSPY=$(find "$XC" -path '*/lib/python3*/os.py' -not -path '*simulator*' | sed -n 1p)
+[ -n "$OSPY" ] || OSPY=$(find "$XC" -path '*/lib/python3*/os.py' | sed -n 1p)
 [ -n "$OSPY" ] || { echo "❌ Không thấy os.py trong xcframework"; find "$XC" -maxdepth 4; exit 1; }
 STD=$(dirname "$OSPY"); NAME=$(basename "$STD")
 DEST="$APP/python/lib/$NAME"
@@ -20,7 +20,7 @@ rsync -a --exclude '__pycache__' --exclude 'test' --exclude 'tests' --exclude 'i
 mkdir -p "$DEST/site-packages"
 
 # Module nhị phân (lib-dynload) của thiết bị (không lấy simulator).
-DYN=$(find "$XC" -type d -name lib-dynload -not -path '*simulator*' | head -1)
+DYN=$(find "$XC" -type d -name lib-dynload -not -path '*simulator*' | sed -n 1p)
 if [ -n "$DYN" ]; then
   echo "== lib-dynload: $DYN"
   mkdir -p "$DEST/lib-dynload"
@@ -29,4 +29,4 @@ else
   echo "⚠️ Không thấy lib-dynload cho thiết bị (một số module chuẩn có thể thiếu)"
 fi
 du -sh "$APP/python"
-ls "$DEST/lib-dynload" 2>/dev/null | head -20 || true
+ls "$DEST/lib-dynload" 2>/dev/null | sed -n 1,20p || true
