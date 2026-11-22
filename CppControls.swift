@@ -60,6 +60,7 @@ struct ControlsConfig: Codable {
     var cursor = CursorStyle()
     var hidden = false              // ẩn các nút điều khiển (con trỏ/bàn chạm vẫn hoạt động)
     var touchpad = true             // true: kéo ngón tay để điều khiển con trỏ; false: chạm trực tiếp xuống SDL
+    var hideFromRecording = false   // ẩn lớp điều khiển khỏi video/ảnh chụp màn hình (mắt vẫn thấy)
 
     init() {}
     init(from d: Decoder) throws {
@@ -68,6 +69,7 @@ struct ControlsConfig: Codable {
         cursor = try c.decodeIfPresent(CursorStyle.self, forKey: .cursor) ?? CursorStyle()
         hidden = try c.decodeIfPresent(Bool.self, forKey: .hidden) ?? false
         touchpad = try c.decodeIfPresent(Bool.self, forKey: .touchpad) ?? true
+        hideFromRecording = try c.decodeIfPresent(Bool.self, forKey: .hideFromRecording) ?? false
     }
 
     static var defaultButtons: [CtrlButton] {
@@ -481,6 +483,82 @@ final class ControlsView: UIView {
 
 // MARK: - View controller + cửa sổ nổi
 
+/// Khung chứa lớp điều khiển. Khi bật `hidesFromCapture`, nội dung được đặt trong "canvas" của một UITextField
+/// `isSecureTextEntry`: iOS loại vùng này khỏi ghi màn hình / chụp màn hình / AirPlay, nhưng trên màn hình vẫn thấy bình thường.
+/// (Mẹo dựa trên hành vi nội bộ của UIKit, có thể thay đổi giữa các bản iOS.)
+final class CaptureShieldView: UIView {
+    let content: UIView
+    private let field = UITextField()
+    private var wantsHidden = false
+
+    init(content: UIView) {
+        self.content = content
+        super.init(frame: .zero)
+        backgroundColor = .clear
+        field.isUserInteractionEnabled = false
+        field.backgroundColor = .clear
+        field.textColor = .clear
+        field.tintColor = .clear
+        field.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        content.frame = bounds
+        content.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(content)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private var canvas: UIView? {
+        guard field.isSecureTextEntry else { return nil }
+        field.layoutIfNeeded()
+        return field.subviews.first
+    }
+
+    func setHidesFromCapture(_ on: Bool) {
+        wantsHidden = on
+        attachContent()
+    }
+
+    private func attachContent() {
+        if wantsHidden {
+            if field.superview == nil {
+                field.frame = bounds
+                insertSubview(field, at: 0)
+            }
+            field.isSecureTextEntry = true
+            if let c = canvas {
+                c.isUserInteractionEnabled = true
+                if content.superview !== c {
+                    content.frame = c.bounds
+                    c.addSubview(content)
+                }
+            }
+        } else {
+            field.isSecureTextEntry = false
+            if content.superview !== self {
+                content.frame = bounds
+                addSubview(content)
+            }
+            field.removeFromSuperview()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        field.frame = bounds
+        if wantsHidden, let c = canvas {
+            if content.superview !== c { attachContent() }
+            content.frame = c.bounds
+        } else if !wantsHidden {
+            content.frame = bounds
+        }
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let h = super.hitTest(point, with: event)
+        if h === self || h === field || h === field.subviews.first { return nil }
+        return h
+    }
+}
+
 private final class ControlsWindow: UIWindow {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let h = super.hitTest(point, with: event)
@@ -492,6 +570,7 @@ final class ControlsViewController: UIViewController {
     private let project: String
     private var config: ControlsConfig
     private let controls = ControlsView()
+    private lazy var shield = CaptureShieldView(content: controls)
     private let editBar = UIStackView()
     weak var hostWindow: UIWindow?
     private var previousKey: UIWindow?
@@ -505,11 +584,12 @@ final class ControlsViewController: UIViewController {
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask { OrientationPolicy.mask }
 
-    override func loadView() { view = controls }
+    override func loadView() { view = shield }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         controls.config = config
+        shield.setHidesFromCapture(config.hideFromRecording)
         controls.onConfigChange = { [weak self] c in self?.update(c) }
         controls.onEditButton = { [weak self] b in self?.editButton(b) }
         controls.onGear = { [weak self] in self?.showMenu() }
@@ -542,6 +622,7 @@ final class ControlsViewController: UIViewController {
     private func update(_ c: ControlsConfig) {
         config = c
         controls.config = c
+        shield.setHidesFromCapture(c.hideFromRecording)
         ControlsStore.save(c, project: project)
     }
 
@@ -590,6 +671,10 @@ final class ControlsViewController: UIViewController {
         let s = sheet("Điều khiển")
         s.addAction(action("Bàn phím ảo (buộc mở)") { GameInput.showKeyboard() })
         s.addAction(action(config.hidden ? "Hiện nút điều khiển" : "Ẩn nút điều khiển") { [weak self] in self?.toggleHidden() })
+        s.addAction(action(config.hideFromRecording ? "Hiện lớp điều khiển trong video quay màn hình" : "Ẩn lớp điều khiển khỏi video quay màn hình") { [weak self] in
+            guard let self = self else { return }
+            var c = self.config; c.hideFromRecording.toggle(); self.update(c)
+        })
         s.addAction(action("Chỉnh sửa nút điều khiển") { [weak self] in self?.setEditing(true) })
         s.addAction(action("Tuỳ chỉnh con trỏ…") { [weak self] in self?.cursorMenu() })
         s.addAction(action(config.touchpad ? "Chuyển sang chạm trực tiếp (tắt con trỏ)" : "Chuyển sang điều khiển bằng con trỏ") { [weak self] in
