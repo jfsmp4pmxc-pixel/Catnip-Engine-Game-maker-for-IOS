@@ -47,7 +47,7 @@ on:
       python_packages:
         description: "Thư viện Python nhúng sẵn (cách nhau bằng dấu cách; cần có wheel iOS arm64 cp313 ở pypi.anaconda.org/beeware). Để trống = không nhúng"
         required: false
-        default: "numpy"
+        default: "numpy pillow"
         type: string
 
 jobs:
