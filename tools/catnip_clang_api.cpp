@@ -18,6 +18,8 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/TargetSelect.h"
 
+#include <dlfcn.h>
+#include <cstdint>
 #include <csignal>
 #include <cstdlib>
 #include <cstdio>
@@ -62,6 +64,28 @@ static void crashHandler(int sig) {
   }
   signal(sig, SIG_DFL);
   raise(sig);
+}
+
+// iOS chỉ cho chạy mã sinh lúc chạy (JIT) khi tiến trình có cờ CS_DEBUGGED; thiếu thì kernel SIGKILL ngay
+// khi nhảy vào trang nhớ chưa ký (không bắt được tín hiệu). Với TrollStore (có get-task-allow) gọi
+// ptrace(PT_TRACE_ME) để kernel bật cờ này, giống các app emulator/JIT.
+extern "C" int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+static bool ensureJIT() {
+  const unsigned CS_DEBUGGED = 0x10000000;
+  auto flags = []() { uint32_t f = 0; csops(getpid(), 0 /*CS_OPS_STATUS*/, &f, sizeof f); return f; };
+  uint32_t f = flags();
+  char b[96];
+  std::snprintf(b, sizeof b, "    csops flags truoc = 0x%x (CS_DEBUGGED=%d)", f, (f & CS_DEBUGGED) ? 1 : 0);
+  trace(b);
+  if (f & CS_DEBUGGED) return true;
+  using PtraceFn = int (*)(int, pid_t, void *, int);
+  auto pt = (PtraceFn)dlsym(RTLD_DEFAULT, "ptrace");
+  if (pt) { int r = pt(0 /*PT_TRACE_ME*/, 0, nullptr, 0); std::snprintf(b, sizeof b, "    ptrace(PT_TRACE_ME) = %d", r); trace(b); }
+  else trace("    khong tim thay ptrace");
+  f = flags();
+  std::snprintf(b, sizeof b, "    csops flags sau = 0x%x (CS_DEBUGGED=%d)", f, (f & CS_DEBUGGED) ? 1 : 0);
+  trace(b);
+  return (f & CS_DEBUGGED) != 0;
 }
 
 static void setErr(char *err, int errlen, const std::string &msg) {
@@ -143,6 +167,10 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
   auto Main = Addr->toPtr<MainFn>();
   char arg0[] = "catnip";
   char *argv[] = {arg0, nullptr};
+  if (!ensureJIT()) {
+    setErr(err, errlen, "Tiến trình chưa có quyền JIT (CS_DEBUGGED). Cần cài bằng TrollStore (kèm get-task-allow) hoặc bật JIT qua SideStore/StikDebug rồi chạy lại.");
+    return -1;
+  }
   trace("[8] goi main()");
   int rc = Main(1, argv);
   trace("[9] main() xong");
