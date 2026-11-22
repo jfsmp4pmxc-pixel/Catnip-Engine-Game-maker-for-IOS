@@ -55,7 +55,7 @@ if with_ish:
     core = env("ISH_CORE")
     if not core:
         sys.exit("WITH_ISH cần ISH_CORE")
-    sources += ["IshBridge.m", "IshBridge.h", "IshShell.swift"]
+    sources += ["IshBridge.m", "IshBridge.h", "IshShell.swift", "NativeTerminal.swift"]
     resources.append(f"{core}/Resources")      # root.tar.gz, repositories.txt (do workflow chép vào)
     bridging = True
     swift_conditions.append("CATNIP_HAS_ISH")

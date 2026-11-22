@@ -466,7 +466,12 @@ final class EditorViewController: UIViewController {
         guard !PythonEngine.shared.running, flushSave() else { return }
         if PythonEngine.isAvailable {
             textView.resignFirstResponder()
-            let vc = CppConsoleViewController(project: project, mode: .python)
+            let vc: UIViewController
+            #if CATNIP_HAS_ISH
+            vc = NativeTerminalViewController(project: project, mode: .python)     // giao diện terminal giống iSH
+            #else
+            vc = CppConsoleViewController(project: project, mode: .python)
+            #endif
             topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
             return
         }
@@ -499,7 +504,13 @@ final class EditorViewController: UIViewController {
             return
         }
         textView.resignFirstResponder()
-        let vc = CppConsoleViewController(project: project)
+        let vc: UIViewController
+        #if CATNIP_HAS_ISH
+        if CppEngine.usesGUI(project: store.projectURL(project)) { vc = CppConsoleViewController(project: project) }   // GUI cần lớp điều khiển ảo
+        else { vc = NativeTerminalViewController(project: project, mode: .cpp) }
+        #else
+        vc = CppConsoleViewController(project: project)
+        #endif
         topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
     }
 
