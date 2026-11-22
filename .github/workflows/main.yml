@@ -42,7 +42,7 @@ on:
       with_python:
         description: "Nhúng CPython (dự án Python chạy native, IPA nặng thêm ~30-40 MB). Cần tải gói BeeWare Python-Apple-support"
         required: true
-        default: false
+        default: true
         type: boolean
 
 jobs:
