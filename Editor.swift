@@ -461,9 +461,15 @@ final class EditorViewController: UIViewController {
     }
     #endif
 
-    /// Chạy main.py bằng python3 trong iSH (CLI tương tác). CPython nhúng native + đồ hoạ: bước sau.
+    /// Chạy main.py bằng CPython nhúng (native) nếu bản build có, không thì bằng python3 trong iSH. Đồ hoạ pygame: bước sau.
     private func runPython() {
-        guard flushSave() else { return }
+        guard !PythonEngine.shared.running, flushSave() else { return }
+        if PythonEngine.isAvailable {
+            textView.resignFirstResponder()
+            let vc = CppConsoleViewController(project: project, mode: .python)
+            topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
+            return
+        }
         #if CATNIP_HAS_ISH
         textView.resignFirstResponder()
         let cmd = "clear; if ! command -v python3 >/dev/null 2>&1; then echo 'Chưa có python3. Chạy: apk add python3'; "

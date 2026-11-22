@@ -5,6 +5,7 @@ Biến môi trường:
   BUNDLE_ID, MARKETING_VERSION, BUILD_NUMBER      (bắt buộc)
   WITH_LOVE=true  + LOVE_DIR, LOVE_LIB            nhúng lõi LÖVE
   CONFIG                                          tên cấu hình build (Debug/Release hoặc tên tuỳ ý như Beta, Preview)
+  WITH_PYTHON=true + PYTHON_SUPPORT               nhúng CPython (thư mục python-support do tools/fetch_python.sh tạo)
   WITH_ISH=true   + ISH_CORE                      nhúng iSH (thư mục ish-core do tools/build_ish_core.sh tạo)
 """
 import os
@@ -13,9 +14,10 @@ import sys
 env = os.environ.get
 with_love = env("WITH_LOVE") == "true"
 with_ish = env("WITH_ISH") == "true"
+with_python = env("WITH_PYTHON") == "true"
 
 sources = ["main.swift", "Models.swift", "Storage.swift", "UI.swift", "Editor.swift", "EditorSidebar.swift",
-           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift", "CppControls.swift"]
+           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift", "CppControls.swift", "PythonEngine.swift"]
 resources = ["Resources"]
 ldflags = ["$(inherited)"]
 header_paths = ["$(inherited)"]
@@ -63,6 +65,17 @@ if with_ish:
     ldflags += ["-lsqlite3", "-lbz2", "-liconv", "-lresolv", "-lz"]
     packages["SwiftTerm"] = {"url": "https://github.com/migueldeicaza/SwiftTerm", "exactVersion": "1.17.0"}
     deps.append({"package": "SwiftTerm"})
+
+if with_python:
+    support = env("PYTHON_SUPPORT")
+    if not support:
+        sys.exit("WITH_PYTHON cần PYTHON_SUPPORT")
+    sources += ["PythonBridge.m", "PythonBridge.h"]
+    bridging = True
+    swift_conditions.append("CATNIP_HAS_PYTHON")
+    gcc_defs.append("CATNIP_HAS_PYTHON=1")
+    framework_paths.append(f"{support}/Python.xcframework/ios-arm64")
+    deps.append({"framework": f"{support}/Python.xcframework", "embed": True, "codeSign": False})
 
 base = {
     "PRODUCT_BUNDLE_IDENTIFIER": env("BUNDLE_ID"),

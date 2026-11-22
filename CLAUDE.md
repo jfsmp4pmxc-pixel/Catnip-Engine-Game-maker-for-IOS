@@ -77,3 +77,9 @@ Mục đích (chủ dự án): **phác thảo giao diện** nhanh, bấm thử �
 
 
 - **C++ chạy bằng g++ trong iSH (dự phòng, `cppEngine = "gpp"`; mặc định là `"clang"` native vì chủ dự án muốn native)**: `Editor.runCppWithGpp` gõ lệnh `g++ -std=c++17 -O1 $(find . -name '*.cpp') -o /tmp/catnip_app && /tmp/catnip_app` vào shell iSH của dự án (`IshRuntime.runCommand`) rồi mở `IshShellViewController`. Chọn ở Cài đặt → C++ → "Chạy bằng": bản Clang tự dựng crash trong `Sema::ActOnStartNamespaceDef` (CurContext null) với mọi file, đang thử build có assertions. Chưa build/kiểm chứng.
+
+## Dự án Python (chưa build/kiểm chứng)
+- `ProjectKind.python`: mẫu `PythonTemplate.main` → main.py. Nút Chạy (`Editor.runPython`): nếu `PythonEngine.isAvailable` (build `with_python`) → `CppConsoleViewController(mode: .python)` (console dùng chung với C++) chạy CPython **native**; không thì gõ `python3 main.py` vào shell iSH.
+- Build: workflow input `with_python` → `tools/fetch_python.sh` (tìm asset `Python-3.13-iOS-support*.tar.gz` ở Release của beeware/Python-Apple-support bằng `gh api`, giải nén ra `python-support/Python.xcframework`) → `gen_project_yml.py` (WITH_PYTHON: PythonBridge.m/.h, `CATNIP_HAS_PYTHON`, framework nhúng) → sau xcodebuild `tools/embed_python.sh` chép thư viện chuẩn + `lib-dynload` vào `Catnip.app/python/lib/python3.X`. Tên asset/bố cục xcframework chưa kiểm chứng: sửa theo log CI.
+- `PythonBridge.m`: `PyConfig` isolated (home = `<bundle>/python`, module_search_paths = lib/python3.X, lib-dynload, site-packages; `use_system_logger = 0` để stdout vào fd 1), nạp prelude `_catnip_run` (dọn module cũ, `runpy.run_path`), nhả GIL sau init, mỗi lần chạy dùng `PyGILState_Ensure`. `PythonEngine` (Swift) chuyển hướng fd 0/1/2 qua pipe giống `CppEngine`.
+- Chưa có: đồ hoạ pygame (kế hoạch: sdl2-compat trên SDL3 của LÖVE + pygame-ce biên dịch cho iOS), điều khiển ảo/con trỏ cho Python, pip/site-packages.

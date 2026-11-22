@@ -7,6 +7,8 @@ import UIKit
 // MARK: - Console
 
 final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
+    enum Mode { case cpp, python }
+    private let mode: Mode
     private let project: String
     private let output = UITextView()
     private let input = UITextField()
@@ -18,15 +20,16 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
     private var historyIndex: Int?
     private var barBottom: NSLayoutConstraint!
 
-    init(project: String) {
+    init(project: String, mode: Mode = .cpp) {
         self.project = project
+        self.mode = mode
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "C++ · \(project)"
+        title = (mode == .python ? "Python · " : "C++ · ") + project
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: "Đóng", style: .done, target: self, action: #selector(closeTapped))
         navigationItem.leftBarButtonItems = [
             UIBarButtonItem(title: "Gửi EOF", style: .plain, target: self, action: #selector(eofTapped)),
@@ -91,10 +94,13 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
 
     private func start() {
         let url = ProjectStore.shared.projectURL(project)
-        if CppEngine.usesGUI(project: url) { CppControlsOverlay.show(project: project) }   // CLI thì không hiện
-        CppEngine.shared.run(project: url, onOutput: { [weak self] s in
+        if mode == .cpp, CppEngine.usesGUI(project: url) { CppControlsOverlay.show(project: project) }   // CLI thì không hiện
+        let runner: (URL, @escaping (String) -> Void, @escaping (Result<Int32, Error>) -> Void) -> Void =
+            mode == .python ? { PythonEngine.shared.run(project: $0, onOutput: $1, onFinish: $2) }
+                            : { CppEngine.shared.run(project: $0, onOutput: $1, onFinish: $2) }
+        runner(url, { [weak self] s in
             DispatchQueue.main.async { self?.append(s) }
-        }, onFinish: { [weak self] result in
+        }, { [weak self] result in
             guard let self = self else { return }
             self.finished = true
             CppControlsOverlay.hide()
@@ -108,7 +114,7 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
                 self.append("\n[Lỗi] \(e.localizedDescription)\n")
             }
         })
-        if CppEngine.shared.running { status.text = "▶︎ Đang chạy" }
+        if (mode == .python ? PythonEngine.shared.running : CppEngine.shared.running) { status.text = "▶︎ Đang chạy" }
         input.becomeFirstResponder()
     }
 
@@ -126,15 +132,15 @@ final class CppConsoleViewController: UIViewController, UITextFieldDelegate {
         textField.text = ""
         if !line.isEmpty { history.append(line) }
         append(line + "\n")             // echo (pipe không có tty nên không tự hiện)
-        CppEngine.shared.sendInput(line + "\n")
+        if mode == .python { PythonEngine.shared.sendInput(line + "\n") } else { CppEngine.shared.sendInput(line + "\n") }
         return false
     }
 
-    @objc private func eofTapped() { CppEngine.shared.closeInput() }
+    @objc private func eofTapped() { if mode == .python { PythonEngine.shared.closeInput() } else { CppEngine.shared.closeInput() } }
     @objc private func copyTapped() { UIPasteboard.general.string = output.text }
     @objc private func closeTapped() {
         CppControlsOverlay.hide()
-        CppEngine.shared.closeInput()
+        if mode == .python { PythonEngine.shared.closeInput() } else { CppEngine.shared.closeInput() }
         dismiss(animated: true)
     }
 }

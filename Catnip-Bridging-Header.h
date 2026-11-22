@@ -16,3 +16,7 @@
 #ifdef CATNIP_HAS_ISH
 #import "IshBridge.h"
 #endif
+
+#ifdef CATNIP_HAS_PYTHON
+#import "PythonBridge.h"
+#endif

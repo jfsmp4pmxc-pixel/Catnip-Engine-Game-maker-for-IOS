@@ -39,6 +39,12 @@ on:
         default: true
         type: boolean
 
+      with_python:
+        description: "Nhúng CPython (dự án Python chạy native, IPA nặng thêm ~30-40 MB). Cần tải gói BeeWare Python-Apple-support"
+        required: true
+        default: false
+        type: boolean
+
 jobs:
   build-ipa:
     name: Build unsigned IPA
@@ -52,6 +58,8 @@ jobs:
       CONFIG: ${{ inputs.configuration }}
       WITH_LOVE: ${{ inputs.with_love }}
       WITH_ISH: ${{ inputs.with_ish }}
+      WITH_PYTHON: ${{ inputs.with_python }}
+      GH_TOKEN: ${{ github.token }}
       # Bản iSH dùng để nhúng (xem workflow ish-core.yml)
       ISH_REF: de5ab2c4b1039551203c1106e75f715cd917544b
       # Bản LÖVE đã kiểm chứng build được (xem workflow love-core.yml)
@@ -102,11 +110,16 @@ jobs:
         if: ${{ inputs.with_ish }}
         run: OUT="$PWD/ish-core" tools/build_ish_core.sh
 
+      - name: Fetch CPython for iOS
+        if: ${{ inputs.with_python }}
+        run: OUT="$PWD/python-support" tools/fetch_python.sh
+
       - name: Generate Xcode project
         run: |
           export LOVE_DIR="$PWD/love"
           export LOVE_LIB="$PWD/build-love/Release-iphoneos/liblove.a"
           export ISH_CORE="$PWD/ish-core"
+          export PYTHON_SUPPORT="$PWD/python-support"
           python3 tools/gen_project_yml.py > project.yml
           echo "=== project.yml ==="
           cat project.yml
@@ -149,6 +162,9 @@ jobs:
             /usr/libexec/PlistBuddy -c "Add :$KEY bool true" "$PLIST"
           done
           rm -rf Payload/Catnip.app/_CodeSignature Payload/Catnip.app/embedded.mobileprovision
+          if [ "$WITH_PYTHON" = "true" ]; then
+            tools/embed_python.sh "Payload/Catnip.app" "$PWD/python-support"
+          fi
           # Quyền JIT / bộ nhớ thực thi cho Clang++ (TrollStore giữ nguyên entitlements đã nhúng).
           cat > ent.plist <<'ENT'
           <?xml version="1.0" encoding="UTF-8"?>
