@@ -113,6 +113,9 @@ int catnip_clang_run(const char *resource_dir, const char *sysroot, const char *
     trace(("[4] CreateCpp cho " + src).c_str());
     auto CI = CB.CreateCpp();
     if (!CI) { setErr(err, errlen, llvm::toString(CI.takeError())); return -1; }
+    // CreateCpp bật -fincremental-extensions (dành cho clang-repl): parser coi mọi thứ không nhận ra là "top-level statement"
+    // và Sema abort/crash. Ta biên dịch cả file như bình thường nên tắt đi (lỗi thật sẽ hiện thành chẩn đoán).
+    (*CI)->getLangOpts().IncrementalExtensions = false;
     auto &FOpts = (*CI)->getFrontendOpts();
     FOpts.Inputs.clear();
     FOpts.Inputs.push_back(clang::FrontendInputFile(src, clang::Language::CXX));
