@@ -44,7 +44,8 @@ jobs:
           LLVM_REF: ${{ inputs.llvm_ref }}
         run: |
           ccache --max-size=3G
-          tools/build_clang_pack.sh
+          chmod +x tools/build_clang_pack.sh
+          bash tools/build_clang_pack.sh
           ccache -s
       - name: Lưu bộ nhớ đệm ccache (cả khi build lỗi)
         if: always()
