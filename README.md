@@ -115,11 +115,10 @@ See the [LICENSE](LICENSE) file for full details.
 
 Copyright (C) 2026 **jfsmp4pmxc-pixel** <ihhjnkk@gmail.com>
 ## Author 
-```txt
-- youtube: @B40Ph4m        |admin
-  github : jfsmp4pmxc-pixel
-  email  : ihhjnkk@gmail.com
 
-- youtube: @h3ll0-70       |admin
-  github : ilovegcc-g00
-```
+` youtube: @B40Ph4m        |admin`  
+` github : jfsmp4pmxc-pixel`  
+` email  : ihhjnkk@gmail.com`  
+  
+` youtube: @h3ll0-70       |admin`  
+` github : ilovegcc-g00`  

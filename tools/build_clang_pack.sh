@@ -101,6 +101,47 @@ mkdir -p "$OUT/pack/sysroot/usr" "$OUT/pack/include"
 mkdir -p "$OUT/pack/resource/lib"
 cp -R "$OUT/build-ios/lib/clang" "$OUT/pack/resource/lib/clang"
 cp -R "$SDK/usr/include" "$OUT/pack/sysroot/usr/include"
+
+# ---- FIX: nhúng compiler-builtin headers vào sysroot ----
+# App gọi clang++ CHỈ với -isysroot (không truyền -resource-dir), nên:
+#   (a) <stdarg.h> — chỉ tồn tại trong clang resource dir — không được tìm thấy,
+#       gây lỗi tại sys/_types/_va_list.h:40.
+#   (b) <stddef.h> của SDK include <sys/_types/_wint_t.h> cần __darwin_wint_t,
+#       nhưng arm/_types.h (đang parse dở) chưa định nghĩa → vòng lặp phụ thuộc
+#       → "unknown type name '__darwin_wint_t'".
+# Giải pháp: copy toàn bộ compiler builtin headers vào sysroot/usr/include/
+# và GHI ĐÈ stddef.h bằng bản của clang (bản clang KHÔNG include _wint_t.h).
+CLANG_RES="$OUT/build-ios/lib/clang"
+CLANG_VER="$(ls -1 "$CLANG_RES" 2>/dev/null | grep -E '^[0-9]+\.' | head -n1 || true)"
+if [ -z "$CLANG_VER" ] || [ ! -d "$CLANG_RES/$CLANG_VER/include" ]; then
+  echo "ERROR: Không tìm thấy clang resource include dir tại $CLANG_RES" >&2
+  echo "       Kiểm tra lại bước 2 (build-ios/lib/clang)." >&2
+  exit 1
+fi
+CLANG_BUILTIN_INC="$CLANG_RES/$CLANG_VER/include"
+SYS_INC="$OUT/pack/sysroot/usr/include"
+echo ">> Clang version: $CLANG_VER"
+echo ">> Merging builtin headers từ $CLANG_BUILTIN_INC"
+
+# Thêm các builtin header SDK còn thiếu (stdarg.h, __stddef_*.h, ...)
+added=0
+for f in "$CLANG_BUILTIN_INC"/*.h; do
+  base="$(basename "$f")"
+  if [ ! -e "$SYS_INC/$base" ]; then
+    cp -f "$f" "$SYS_INC/$base"
+    added=$((added + 1))
+  fi
+done
+echo ">> Đã thêm $added builtin headers vào sysroot"
+
+# Ghi đè stddef.h — cắt vòng lặp phụ thuộc với _wint_t.h
+cp -f "$CLANG_BUILTIN_INC/stddef.h" "$SYS_INC/stddef.h"
+echo ">> Đã override stddef.h (bản clang, không include _wint_t.h)"
+
+# Sanity check ngay trên pack trước khi nén
+test -f "$SYS_INC/stdarg.h"   || { echo "ERROR: stdarg.h chưa có trong sysroot" >&2; exit 1; }
+test -f "$SYS_INC/stddef.h"   || { echo "ERROR: stddef.h chưa có trong sysroot" >&2; exit 1; }
+
 if [ -n "${SDL3_HEADERS:-}" ] && [ -d "$SDL3_HEADERS" ]; then cp -R "$SDL3_HEADERS" "$OUT/pack/include/SDL3"; fi
 
 # 5) Đóng gói: tar GNU + deflate thô (Compression framework của app giải được).
@@ -137,5 +178,19 @@ missing = [n for n in need if n not in names]
 if missing: sys.exit("Gói thiếu: " + ", ".join(missing))
 if not any(n.startswith("sysroot/usr/include/c++/v1/") for n in names): sys.exit("Gói thiếu libc++ headers")
 if not any(n.startswith("resource/lib/clang/") for n in names): sys.exit("Gói thiếu resource headers của clang")
+
+# ---- Các check mới cho fix ----
+if "sysroot/usr/include/stdarg.h" not in names:
+    sys.exit("Gói thiếu sysroot/usr/include/stdarg.h → app sẽ không compile được")
+if "sysroot/usr/include/stddef.h" not in names:
+    sys.exit("Gói thiếu sysroot/usr/include/stddef.h")
+# Kiểm tra stddef.h đúng là bản clang (không chứa include _wint_t.h)
+for m in t.getmembers():
+    if m.name.lstrip("./") == "sysroot/usr/include/stddef.h":
+        content = t.extractfile(m).read().decode("utf-8", "replace")
+        if "_wint_t.h" in content:
+            sys.exit("stddef.h vẫn là bản SDK (có include _wint_t.h) → chưa override đúng")
+        print(">> stddef.h OK (bản clang, không include _wint_t.h)")
+        break
 print("OK: gói hợp lệ")
 PY

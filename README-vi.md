@@ -92,7 +92,7 @@
 ## tiến trình 
 - [x] trình soạn thảo mã
 - [x] LÖVE
-- [ ] kết nối Github
+- [x] kết nối Github
 - [ ] build
 - Nhật ký thay đổi đầy đủ: [CHANGELOG](CHANGELOG.md)
 ## giấy phép
