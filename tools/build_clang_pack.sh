@@ -4,6 +4,7 @@
 #   LLVM_REF=llvmorg-20.1.8
 #   SDL3_HEADERS=<thư mục chứa SDL3/*.h>  (tuỳ chọn; ví dụ từ love-apple-dependencies)
 # Kết quả: $OUT/catnip-clang-ios-arm64.tar.z (tar GNU nén deflate thô, app tải về và giải nén).
+# Chưa kiểm chứng: LLVM cho iOS tốn nhiều giờ; nếu lỗi thì sửa theo log.
 set -euo pipefail
 
 OUT="${OUT:-$PWD/clang-pack}"
@@ -27,7 +28,9 @@ cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-host" $LAUNCHER \
   -DLLVM_TARGETS_TO_BUILD="AArch64" -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF
 ninja -C "$OUT/build-host" llvm-tblgen llvm-min-tblgen clang-tblgen
 
-# 2) LLVM + Clang cho iOS arm64.
+# Lưu ý: dùng CMAKE_SYSTEM_NAME=Darwin (không phải iOS) vì LLVM chọn cờ linker theo tên 'Darwin';
+# nếu để iOS, nó dùng cờ kiểu Linux (--whole-archive, -z defs...) và liên kết hỏng.
+# 2) LLVM + Clang cho iOS arm64 (thư viện động libLLVM + libclang-cpp).
 cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" $LAUNCHER \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_CROSSCOMPILING=ON -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -67,6 +70,8 @@ xcrun --sdk iphoneos clang++ -arch arm64 -miphoneos-version-min=15.0 -isysroot "
   -o "$OUT/pack/lib/libcatnipclang.dylib"
 cp -L "$OUT/build-ios/lib/"libLLVM*.dylib "$OUT/build-ios/lib/"libclang-cpp*.dylib "$OUT/pack/lib/"
 xcrun strip -x "$OUT/pack/lib/"*.dylib || true
+# libclang-cpp link vào CoreServices.framework (không có trên iOS) → dyld báo thiếu thư viện và app crash.
+# Đổi thành LC_LOAD_WEAK_DYLIB để thiếu cũng không sao.
 python3 - "$OUT/pack/lib" <<'PY'
 import sys, os, struct
 for fn in os.listdir(sys.argv[1]):
@@ -84,74 +89,21 @@ for fn in os.listdir(sys.argv[1]):
         o += s
     open(path, "wb").write(d)
 PY
+# iOS chỉ nạp dylib có chữ ký (ít nhất ad-hoc). strip làm mất chữ ký nên ký lại SAU strip.
 for f in "$OUT/pack/lib/"*.dylib; do
   codesign --force --sign - "$f"
   codesign --verify --verbose=1 "$f"
 done
 ls -lh "$OUT/pack/lib"
 
-# 4) Header: sysroot iOS, resource headers clang (nếu có), SDL3.
-mkdir -p "$OUT/pack/sysroot/usr" "$OUT/pack/include" "$OUT/pack/resource/lib"
-if [ -d "$OUT/build-ios/lib/clang" ]; then
-  cp -R "$OUT/build-ios/lib/clang" "$OUT/pack/resource/lib/clang"
-  echo ">> Copied clang resource dir vào pack/resource/lib/clang"
-else
-  echo ">> WARN: $OUT/build-ios/lib/clang không tồn tại — bỏ qua resource dir"
-fi
+# 4) Header: resource của clang, sysroot iOS (usr/include có cả libc++), SDL3.
+mkdir -p "$OUT/pack/sysroot/usr" "$OUT/pack/include"
+mkdir -p "$OUT/pack/resource/lib"
+cp -R "$OUT/build-ios/lib/clang" "$OUT/pack/resource/lib/clang"
 cp -R "$SDK/usr/include" "$OUT/pack/sysroot/usr/include"
-
-# ---- FIX: nhúng compiler-builtin headers vào sysroot ----
-# App gọi clang++ CHỈ với -isysroot (không -resource-dir), nên:
-#   (a) <stdarg.h> — chỉ trong clang resource dir — không tìm thấy → lỗi _va_list.h.
-#   (b) <stddef.h> SDK include <sys/_types/_wint_t.h> cần __darwin_wint_t
-#       trong khi arm/_types.h chưa parse xong → "__darwin_wint_t unknown type".
-# Giải pháp: copy builtin headers vào sysroot/usr/include/ + override stddef.h.
-SYS_INC="$OUT/pack/sysroot/usr/include"
-
-# Tìm clang builtin include dir: ưu tiên build-ios → install → source.
-CLANG_BUILTIN_INC=""
-for d in "$OUT/build-ios" "$OUT/install"; do
-  [ -d "$d" ] || continue
-  CANDIDATE="$(find "$d" -maxdepth 7 -type d -path '*/lib/clang/*/include' -print -quit 2>/dev/null || true)"
-  if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/stdarg.h" ] && [ -f "$CANDIDATE/stddef.h" ]; then
-    CLANG_BUILTIN_INC="$CANDIDATE"
-    echo ">> Clang builtin include: $CLANG_BUILTIN_INC (từ $d)"
-    break
-  fi
-done
-if [ -z "$CLANG_BUILTIN_INC" ] && [ -f "$SRC/clang/lib/Headers/stdarg.h" ] && [ -f "$SRC/clang/lib/Headers/stddef.h" ]; then
-  CLANG_BUILTIN_INC="$SRC/clang/lib/Headers"
-  echo ">> Clang builtin include: $CLANG_BUILTIN_INC (fallback source)"
-fi
-if [ -z "$CLANG_BUILTIN_INC" ]; then
-  echo "ERROR: Không tìm thấy clang builtin headers ở build dir hoặc source." >&2
-  echo "Debug — các file stdarg.h/stddef.h có trong \$OUT:" >&2
-  find "$OUT" \( -name 'stdarg.h' -o -name 'stddef.h' \) 2>/dev/null | head -30 >&2 || true
-  exit 1
-fi
-
-# Copy các builtin header SDK còn thiếu
-added=0
-for f in "$CLANG_BUILTIN_INC"/*.h; do
-  base="$(basename "$f")"
-  if [ ! -e "$SYS_INC/$base" ]; then
-    cp -f "$f" "$SYS_INC/$base"
-    added=$((added + 1))
-  fi
-done
-echo ">> Đã thêm $added builtin headers vào sysroot"
-
-# Ghi đè stddef.h — cắt vòng lặp phụ thuộc _wint_t.h
-cp -f "$CLANG_BUILTIN_INC/stddef.h" "$SYS_INC/stddef.h"
-echo ">> Đã override stddef.h (bản clang, không include _wint_t.h)"
-
-# Sanity check
-test -f "$SYS_INC/stdarg.h"   || { echo "ERROR: stdarg.h chưa có trong sysroot" >&2; exit 1; }
-test -f "$SYS_INC/stddef.h"   || { echo "ERROR: stddef.h chưa có trong sysroot" >&2; exit 1; }
-
 if [ -n "${SDL3_HEADERS:-}" ] && [ -d "$SDL3_HEADERS" ]; then cp -R "$SDL3_HEADERS" "$OUT/pack/include/SDL3"; fi
 
-# 5) Đóng gói.
+# 5) Đóng gói: tar GNU + deflate thô (Compression framework của app giải được).
 python3 - "$OUT/pack" "$OUT/catnip-clang-ios-arm64.tar.z" <<'PY'
 import sys, tarfile, zlib, io, os
 src, dst = sys.argv[1], sys.argv[2]
@@ -172,7 +124,7 @@ print("size:", os.path.getsize(dst))
 PY
 ls -lh "$OUT/catnip-clang-ios-arm64.tar.z"
 
-# 6) Verify.
+# 6) Kiểm tra gói đúng như app sẽ đọc: giải nén lại bằng python và đòi có các file bắt buộc.
 python3 - "$OUT/catnip-clang-ios-arm64.tar.z" <<'PY'
 import sys, zlib, io, tarfile
 data = zlib.decompressobj(-15).decompress(open(sys.argv[1], "rb").read())
@@ -184,16 +136,6 @@ need = ["lib/libcatnipclang.dylib", "lib/libclang-cpp.dylib", "lib/libLLVM.dylib
 missing = [n for n in need if n not in names]
 if missing: sys.exit("Gói thiếu: " + ", ".join(missing))
 if not any(n.startswith("sysroot/usr/include/c++/v1/") for n in names): sys.exit("Gói thiếu libc++ headers")
-if "sysroot/usr/include/stdarg.h" not in names:
-    sys.exit("Gói thiếu sysroot/usr/include/stdarg.h → app sẽ không compile được")
-if "sysroot/usr/include/stddef.h" not in names:
-    sys.exit("Gói thiếu sysroot/usr/include/stddef.h")
-for m in t.getmembers():
-    if m.name.lstrip("./") == "sysroot/usr/include/stddef.h":
-        c = t.extractfile(m).read().decode("utf-8","replace")
-        if "_wint_t.h" in c:
-            sys.exit("stddef.h vẫn là bản SDK (có _wint_t.h) → chưa override đúng")
-        print(">> stddef.h OK (bản clang)")
-        break
+if not any(n.startswith("resource/lib/clang/") for n in names): sys.exit("Gói thiếu resource headers của clang")
 print("OK: gói hợp lệ")
 PY
