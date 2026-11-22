@@ -32,7 +32,7 @@ ninja -C "$OUT/build-host" llvm-tblgen llvm-min-tblgen clang-tblgen
 # nếu để iOS, nó dùng cờ kiểu Linux (--whole-archive, -z defs...) và liên kết hỏng.
 # 2) LLVM + Clang cho iOS arm64 (thư viện động libLLVM + libclang-cpp).
 cmake -G Ninja -S "$SRC/llvm" -B "$OUT/build-ios" $LAUNCHER \
-  -DCMAKE_BUILD_TYPE=MinSizeRel \
+  -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_CROSSCOMPILING=ON -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
   -DLLVM_HOST_TRIPLE=arm64-apple-ios15.0 \
