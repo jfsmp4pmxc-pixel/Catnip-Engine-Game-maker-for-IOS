@@ -17,7 +17,19 @@ enum ClangToolchain {
     static var dir: URL { CatnipPaths.root.appendingPathComponent("Clang", isDirectory: true) }
     static var libraryURL: URL { dir.appendingPathComponent("lib/libcatnipclang.dylib") }
     static var sysrootURL: URL { dir.appendingPathComponent("sysroot", isDirectory: true) }
-    static var resourceURL: URL { dir.appendingPathComponent("resource", isDirectory: true) }
+    static var resourceURL: URL {
+        // clang cần -resource-dir = resource/lib/clang/<phiên bản> (chứa include/stdarg.h, stddef.h...)
+        let base = dir.appendingPathComponent("resource", isDirectory: true)
+        let clangDir = base.appendingPathComponent("lib/clang", isDirectory: true)
+        let fm = FileManager.default
+        if let vs = try? fm.contentsOfDirectory(atPath: clangDir.path).sorted(by: >) {
+            for v in vs {
+                let d = clangDir.appendingPathComponent(v, isDirectory: true)
+                if fm.fileExists(atPath: d.appendingPathComponent("include/stdarg.h").path) { return d }
+            }
+        }
+        return base
+    }
     static var includeURL: URL { dir.appendingPathComponent("include", isDirectory: true) }
     static var isInstalled: Bool { FileManager.default.fileExists(atPath: libraryURL.path) }
 
