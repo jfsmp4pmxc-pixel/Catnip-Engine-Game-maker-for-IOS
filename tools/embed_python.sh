@@ -30,3 +30,27 @@ else
 fi
 du -sh "$APP/python"
 ls "$DEST/lib-dynload" 2>/dev/null | sed -n 1,20p || true
+
+# Thư viện bên thứ ba (wheel iOS arm64 của BeeWare) → site-packages. Biến PYTHON_PACKAGES, ví dụ "numpy pillow".
+if [ -n "${PYTHON_PACKAGES:-}" ]; then
+  PYVER="${NAME#python}"   # 3.13
+  PYTAG="${PYVER/./}"
+  WH="$(mktemp -d)"
+  echo "== pip download: $PYTHON_PACKAGES (cp$PYTAG, ios_13_0_arm64_iphoneos)"
+  # shellcheck disable=SC2086
+  python3 -m pip download $PYTHON_PACKAGES -d "$WH" \
+    --platform ios_13_0_arm64_iphoneos --python-version "$PYVER" --implementation cp --abi "cp$PYTAG" \
+    --only-binary=:all: --extra-index-url https://pypi.anaconda.org/beeware/simple \
+    || { echo "❌ Không tải được wheel iOS cho: $PYTHON_PACKAGES"; exit 1; }
+  for w in "$WH"/*.whl; do
+    echo "  + $(basename "$w")"
+    unzip -q -o "$w" -d "$DEST/site-packages"
+  done
+  # Dọn bớt: test, __pycache__, dist-info không cần
+  find "$DEST/site-packages" -type d \( -name tests -o -name test -o -name __pycache__ \) -prune -exec rm -rf {} + 2>/dev/null || true
+  # Ký ad-hoc các .so/.dylib (iOS không nạp mã nhị phân chưa ký)
+  find "$DEST/site-packages" \( -name '*.so' -o -name '*.dylib' \) -print0 | while IFS= read -r -d '' f; do
+    codesign --force --sign - "$f" 2>/dev/null || echo "⚠️ không ký được $f"
+  done
+  du -sh "$DEST/site-packages"
+fi

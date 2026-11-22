@@ -44,6 +44,11 @@ on:
         required: true
         default: true
         type: boolean
+      python_packages:
+        description: "Thư viện Python nhúng sẵn (cách nhau bằng dấu cách; cần có wheel iOS arm64 cp313 ở pypi.anaconda.org/beeware). Để trống = không nhúng"
+        required: false
+        default: "numpy"
+        type: string
 
 jobs:
   build-ipa:
@@ -59,6 +64,7 @@ jobs:
       WITH_LOVE: ${{ inputs.with_love }}
       WITH_ISH: ${{ inputs.with_ish }}
       WITH_PYTHON: ${{ inputs.with_python }}
+      PYTHON_PACKAGES: ${{ inputs.python_packages }}
       GH_TOKEN: ${{ github.token }}
       # Bản iSH dùng để nhúng (xem workflow ish-core.yml)
       ISH_REF: de5ab2c4b1039551203c1106e75f715cd917544b
