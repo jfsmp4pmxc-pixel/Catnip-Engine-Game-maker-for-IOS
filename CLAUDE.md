@@ -43,7 +43,7 @@ Chủ dự án nói tiếng Việt: **trả lời bằng tiếng Việt**. Giao 
 - Mã thoát từ kernel iSH là `status << 8`.
 - Lua 5.1/LuaJIT: không có `string.rep` với separator, không có `+=`, `!=`.
 - Cài đặt "Cuộn ngang" (`scrollHorizontal`, mặc định tắt = ngắt dòng mềm): bật thì không ngắt dòng, textView cuộn ngang (container 10 000 pt, `.byClipping`). `wrapLines`/`indentWrapped` là trường cũ, không dùng. Chưa build/kiểm chứng. Đã từng làm Chat AI (Claude/DeepSeek) rồi huỷ theo yêu cầu.
-- 2o là "Twoo" không phải là "oo".
+- Tên ngôn ngữ là **TwooLang** ("Twoo", không phải "oo" hay "Two"); đuôi file `.2o`, repo `2oLang`. Đặt tên file/lớp trong app theo `Twoo*`.
 - 2o là .2o của 2oLang. Sắp được tích hợp vào Catnip.
 
 ## Loại dự án "UI" (0.5.x) — tình hình hiện tại
@@ -85,3 +85,10 @@ Mục đích (chủ dự án): **phác thảo giao diện** nhanh, bấm thử �
 - Chưa có: đồ hoạ pygame (kế hoạch: sdl2-compat trên SDL3 của LÖVE + pygame-ce biên dịch cho iOS), điều khiển ảo/con trỏ cho Python, pip/site-packages.
 - Ẩn khỏi video quay màn hình: `CaptureShieldView` (CppControls.swift) là root view của `ControlsViewController`; khi `ControlsConfig.hideFromRecording` bật, `ControlsView` được đặt vào canvas của một `UITextField.isSecureTextEntry` (iOS loại vùng này khỏi ghi màn hình/chụp ảnh, mắt vẫn thấy). Mẹo dựa trên cấu trúc nội bộ UIKit (`subviews.first`), chưa kiểm chứng trên iOS 15. Chỉ áp dụng cho lớp điều khiển, không áp cho bàn phím hệ thống.
 - Terminal native kiểu iSH: `NativeTerminal.swift` (`NativeTerminalViewController`, SwiftTerm, chỉ khi `CATNIP_HAS_ISH`) dùng cho Python native và C++ CLI (GUI C++ vẫn dùng `CppConsoleViewController` vì cần lớp điều khiển ảo). Pipe không phải tty nên tự làm line discipline (echo, xoá lùi, Enter gửi cả dòng, Ctrl-D = EOF, Ctrl-C bỏ dòng; phím mũi tên bị lọc). Output đổi "\n" thành "\r\n". Chưa build/kiểm chứng.
+
+## TwooLang (.2o) — chạy native arm64 (chưa build/kiểm chứng trên thiết bị)
+- Nguồn trình biên dịch chép từ repo 2oLang vào `TwooLang/` (+ `Lib/`, `twolib_data.inc` sinh bằng `tools/embed.cpp` của repo đó). Build luôn có (C++17 thuần, định nghĩa `TWOO_AS_LIBRARY`: `main.cpp` đổi `main` → `twoo_main`, bỏ `system()`).
+- **Backend A64** (do Claude thêm, chưa đẩy lên repo 2oLang): `asm.hpp` có chế độ `a64` mô phỏng đúng ngữ nghĩa x86 (eax=x0, ecx=x1, edx=x2, ebx=x3, esi=x4, edi=x5, esp=x27, ebp=x28: ngăn xếp PHẦN MỀM, không dùng sp thật; x16/x17 tạm; call/ret lưu địa chỉ trả về lên ngăn xếp phần mềm). Mục tiêu `iOS64` (`Fmt::A64`, `OS::IOS`): ảnh = [32 byte tiêu đề "2oA6"][code][đệm 16 KB][data]. Lời gọi hệ thống đi qua con trỏ hàm của app ở ô runtime 63 (mã 0 đọc, 1 ghi, 2 thoát, 3 ioctl, 100 pow); lệnh x87 thay bằng `frint*` và gọi `pow` của host.
+- Kiểm thử: `tools/a64emu.py` là trình mô phỏng A64 (đúng tập lệnh backend sinh ra) chạy được cả 9 bài `tests/cases` của repo 2oLang trên máy dev. Muốn thử: build `TwooLang/*.cpp` bằng g++, `./2o file.2o -t iOS64 -o x.bin`, `python3 tools/a64emu.py x.bin`.
+- Chạy trong app: `TwooBridge.h` + `TwooLang/TwooBridge.cpp` (`twoo_compile`, `twoo_run_image`: mmap RW → chép → mprotect RX, cờ `CS_DEBUGGED` bằng `ptrace(PT_TRACE_ME)`, exit = `longjmp`), `TwooEngine.swift` (pipe + dup2 như PythonEngine, thư viện tải bằng URLSession vào `Application Support/Catnip/2oLib`, nhập ở Cài đặt → "TwooLang (.2o)"), `NativeRunEngine.swift` (giao diện chung cho terminal). Terminal giả: stdout báo là tty (có màu, `console.size`); stdin vẫn là pipe nên `input` chỉ nhập theo dòng.
+- Loại dự án `twoObj` hiển thị "TwooLang", mẫu `main.2o`, tô màu `Language.twoo`, tài liệu chương 25.

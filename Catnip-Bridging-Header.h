@@ -8,6 +8,8 @@
 
 // Chỉ được dùng khi build có nhúng LÖVE và/hoặc iSH (workflow đặt SWIFT_OBJC_BRIDGING_HEADER
 // cùng các định nghĩa CATNIP_HAS_LOVE / CATNIP_HAS_ISH tương ứng).
+#import "TwooBridge.h"   // TwooLang nhúng: luôn có (không phụ thuộc gì ngoài chuẩn C++)
+
 #ifdef CATNIP_HAS_LOVE
 #import "LoveBridge.h"
 #import "CppInput.h"

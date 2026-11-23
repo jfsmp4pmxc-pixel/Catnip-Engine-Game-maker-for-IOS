@@ -128,6 +128,20 @@ extension SyntaxHighlighter {
                 HighlightRule(kind: .op,      regex: re("=")),
                 HighlightRule(kind: .punct,   regex: re(#"[\[\]{},]"#))
             ]
+        case .twoo:
+            return [
+                HighlightRule(kind: .comment, regex: re(#"//[^\n]*|/\*[\s\S]*?\*/"#)),
+                HighlightRule(kind: .string,  regex: re(#""(?:\\[\s\S]|[^\\"\n])*""#)),
+                HighlightRule(kind: .decorator, regex: re(#"^[ \t]*#[ \t]*import\b"#)),
+                HighlightRule(kind: .number,  regex: re(#"\b\d+(?:\.\d+)?\b"#)),
+                HighlightRule(kind: .keyword, regex: re(#"\b(?:global|var|entry|db|define|obj|public|private|msg|if|else|while|break|continue|return|exit|and|or|not|to|input|len|element|random|system|drive|add|rm)\b"#)),
+                HighlightRule(kind: .type,    regex: re(#"\b(?:int|float|string|drive)\b"#)),
+                HighlightRule(kind: .bool,    regex: re(#"\b(?:true|false|nil)\b"#)),
+                HighlightRule(kind: .attr,    regex: re(#"\b(?:black|red|green|yellow|blue|magenta|cyan|white|gray)\b"#)),
+                HighlightRule(kind: .function,regex: re(#"\b[A-Za-z_]\w*(?=\s*\()"#)),
+                HighlightRule(kind: .op,      regex: re(#"[+\-*/%=<>!^]+"#)),
+                HighlightRule(kind: .punct,   regex: re(#"[{}()\[\];,.]"#))
+            ]
         case .dart:
             return cLike(keywords: "abstract|as|assert|async|await|break|case|catch|class|const|continue|covariant|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|try|typedef|var|void|while|with|yield",
                          bools: "true|false|null",

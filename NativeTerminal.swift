@@ -9,7 +9,7 @@ import UIKit
 import SwiftTerm
 
 final class NativeTerminalViewController: UIViewController, TerminalViewDelegate {
-    enum Mode { case cpp, python }
+    typealias Mode = NativeRunMode
 
     private let project: String
     private let mode: Mode
@@ -26,11 +26,11 @@ final class NativeTerminalViewController: UIViewController, TerminalViewDelegate
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private var isRunning: Bool { mode == .python ? PythonEngine.shared.running : CppEngine.shared.running }
+    private var isRunning: Bool { mode.engine.running }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = (mode == .python ? "Python · " : "C++ · ") + project
+        title = mode.titlePrefix + project
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(doneTapped))
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "Chạy lại", style: .plain, target: self, action: #selector(rerunTapped))
 
@@ -79,11 +79,7 @@ final class NativeTerminalViewController: UIViewController, TerminalViewDelegate
             case .failure(let e): self.write("\n[Lỗi] \(e.localizedDescription)\n")
             }
         }
-        if mode == .python {
-            PythonEngine.shared.run(project: url, onOutput: onOutput, onFinish: onFinish)
-        } else {
-            CppEngine.shared.run(project: url, onOutput: onOutput, onFinish: onFinish)
-        }
+        mode.engine.run(project: url, onOutput: onOutput, onFinish: onFinish)
     }
 
     /// Ghi chữ vào terminal; stdout từ pipe chỉ có "\\n" nên đổi thành "\\r\\n".
@@ -100,12 +96,12 @@ final class NativeTerminalViewController: UIViewController, TerminalViewDelegate
 
     @objc private func doneTapped() {
         _ = term.resignFirstResponder()
-        if mode == .python { PythonEngine.shared.closeInput() } else { CppEngine.shared.closeInput() }
+        mode.engine.closeInput()
         dismiss(animated: true)
     }
 
     private func sendToProgram(_ s: String) {
-        if mode == .python { PythonEngine.shared.sendInput(s) } else { CppEngine.shared.sendInput(s) }
+        mode.engine.sendInput(s)
     }
 
     // MARK: TerminalViewDelegate (nhập từ bàn phím)
@@ -135,9 +131,7 @@ final class NativeTerminalViewController: UIViewController, TerminalViewDelegate
                     term.feed(text: "\u{08} \u{08}")
                 }
             case "\u{04}":                          // Ctrl-D
-                if lineBuffer.isEmpty {
-                    if mode == .python { PythonEngine.shared.closeInput() } else { CppEngine.shared.closeInput() }
-                }
+                if lineBuffer.isEmpty { mode.engine.closeInput() }
             case "\u{03}":                          // Ctrl-C
                 term.feed(text: "^C\r\n")
                 lineBuffer.removeAll()
@@ -149,7 +143,10 @@ final class NativeTerminalViewController: UIViewController, TerminalViewDelegate
         }
     }
 
-    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
+    func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
+        TwooEngine.shared.rows = Int32(newRows)
+        TwooEngine.shared.cols = Int32(newCols)
+    }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
     func scrolled(source: TerminalView, position: Double) {}

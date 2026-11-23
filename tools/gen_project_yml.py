@@ -17,17 +17,19 @@ with_ish = env("WITH_ISH") == "true"
 with_python = env("WITH_PYTHON") == "true"
 
 sources = ["main.swift", "Models.swift", "Storage.swift", "UI.swift", "Editor.swift", "EditorSidebar.swift",
-           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift", "CppControls.swift", "PythonEngine.swift"]
+           "GameRun.swift", "Fonts.swift", "Themes.swift", "MarkdownPreview.swift", "Docs.swift", "Shell.swift", "SpellCheck.swift", "EditorSync.swift", "GitHub.swift", "GitHubUI.swift", "TextMate.swift", "SwiftUIParser.swift", "SwiftUIInterp.swift", "UIPreview.swift", "MoreLanguages.swift", "MediaViewer.swift", "ThemeEditor.swift", "ClangToolchain.swift", "CppConsole.swift", "GitHubReleases.swift", "CppControls.swift", "PythonEngine.swift", "TwooEngine.swift", "NativeRunEngine.swift", "TwooBridge.h"]
+# TwooLang (trình biên dịch .2o nhúng, C++17 thuần): luôn build. .hpp/.inc chỉ để include; không biên dịch riêng.
+sources += [{"path": "TwooLang", "excludes": ["**/*.hpp", "**/*.inc", "**/*.2o", "LICENSE", "Lib/**"]}]
 resources = ["Resources"]
 ldflags = ["$(inherited)"]
 header_paths = ["$(inherited)"]
 framework_paths = ["$(inherited)"]
 swift_conditions = ["$(inherited)"]
-gcc_defs = ["$(inherited)"]
+gcc_defs = ["$(inherited)", "TWOO_AS_LIBRARY=1"]
 deps = []
 packages = {}
-bridging = False
-extra_settings = {}
+bridging = True     # TwooBridge.h (C) luôn nằm trong bridging header
+extra_settings = {"CLANG_CXX_LANGUAGE_STANDARD": "c++17", "CLANG_CXX_LIBRARY": "libc++"}
 
 if with_love:
     love_dir = env("LOVE_DIR"); love_lib = env("LOVE_LIB")
@@ -38,7 +40,6 @@ if with_love:
     bridging = True
     swift_conditions.append("CATNIP_HAS_LOVE")
     gcc_defs.append("CATNIP_HAS_LOVE=1")
-    extra_settings.update({"CLANG_CXX_LANGUAGE_STANDARD": "c++17", "CLANG_CXX_LIBRARY": "libc++"})
     header_paths += [f"{love_dir}/src", f"{love_dir}/src/libraries", f"{love_dir}/src/modules",
                      f"{xc}/ios/libraries/Lua.xcframework/ios-arm64/Headers"]
     framework_paths.append(f"{xc}/shared/Frameworks/SDL3.xcframework/ios-arm64")
@@ -136,7 +137,13 @@ if packages:
             out.append(f"    {k}: {q(v)}")
 out += ["targets:", "  Catnip:", "    type: application", "    platform: iOS", "    sources:"]
 for s in sources:
-    out.append(f"      - {q(s)}")
+    if isinstance(s, dict):
+        out.append(f"      - path: {q(s['path'])}")
+        if s.get("excludes"):
+            out.append("        excludes:")
+            out += [f"          - {q(e)}" for e in s["excludes"]]
+    else:
+        out.append(f"      - {q(s)}")
 for r in resources:
     if r == "Resources" or r.endswith("/Resources"):
         out += [f"      - path: {q(r)}", "        buildPhase: resources"]

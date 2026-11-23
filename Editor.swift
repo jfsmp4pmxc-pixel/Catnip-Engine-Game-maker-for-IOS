@@ -486,6 +486,19 @@ final class EditorViewController: UIViewController {
         #endif
     }
 
+    /// Chạy dự án TwooLang: biên dịch ra arm64 rồi chạy ngay trong app, hiện trong terminal.
+    private func runTwoo() {
+        guard !TwooEngine.shared.running, flushSave() else { return }
+        textView.resignFirstResponder()
+        let vc: UIViewController
+        #if CATNIP_HAS_ISH
+        vc = NativeTerminalViewController(project: project, mode: .twoo)
+        #else
+        vc = CppConsoleViewController(project: project, mode: .twoo)
+        #endif
+        topPresenter.present(CatnipNavigationController(rootViewController: vc), animated: true)
+    }
+
     /// Chạy dự án C++ bằng Clang++ (JIT) và mở console tương tác.
     private func runCpp() {
         guard !CppEngine.shared.running, flushSave() else { return }
@@ -519,6 +532,7 @@ final class EditorViewController: UIViewController {
     @objc private func runTapped() {
         if kind == .cpp { runCpp(); return }
         if kind == .python { runPython(); return }
+        if kind == .twoObj { runTwoo(); return }
         guard !isGameRunning, flushSave() else { return }
         #if CATNIP_HAS_LOVE
         guard store.read(project: project, path: "main.lua") != nil else {

@@ -205,7 +205,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .love:    return "LÖVE"
         case .scratch: return "Scratch"
         case .python:  return "Python"
-        case .twoObj:  return "2o obj"
+        case .twoObj:  return "TwooLang"
         case .catnip:  return "Catnip Engine"
         case .ui:      return "UI"
         case .cpp:     return "C++"
@@ -219,7 +219,8 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .ui:      return "Giao diện SwiftUI, xem trước tương tác được"
         case .cpp:     return "C++ chạy bằng Clang++ trong app (CLI, console, SDL3)"
         case .python:  return "Python chạy trong shell iSH (CLI); đồ hoạ native đang làm"
-        case .twoObj, .catnip: return "Sắp ra mắt"
+        case .twoObj:  return "TwooLang (.2o) biên dịch ra mã arm64 và chạy ngay trong app"
+        case .catnip:  return "Sắp ra mắt"
         }
     }
 
@@ -236,11 +237,30 @@ enum ProjectKind: String, Codable, CaseIterable {
     }
 
     /// Chỉ LÖVE và dự án thường dùng được; các loại còn lại là "coming soon".
-    var isAvailable: Bool { self == .love || self == .scratch || self == .ui || self == .cpp || self == .python }
+    var isAvailable: Bool { self == .love || self == .scratch || self == .ui || self == .cpp || self == .python || self == .twoObj }
     /// Chỉ dự án LÖVE mới có nút Chạy.
-    var canRun: Bool { self == .love || self == .cpp || self == .python }
+    var canRun: Bool { self == .love || self == .cpp || self == .python || self == .twoObj }
     /// Dự án UI có nút Preview (thay cho Chạy).
     var canPreview: Bool { self == .ui }
+}
+
+enum TwooTemplate {
+    static let main = """
+    // Dự án TwooLang — bấm Chạy: biên dịch ra mã arm64 và chạy ngay trong app.
+    global {
+    }
+
+    var {
+        db string ten = "Peter";
+        db int tuoi = 25;
+    }
+
+    entry {
+        msg "Xin chào, " + ten + "!\\n", green;
+        msg "Năm sau bạn " + (tuoi + 1) + " tuổi.\\n";
+        exit;
+    }
+    """
 }
 
 enum CppTemplate {
@@ -343,7 +363,9 @@ final class ProjectStore {
                 try CppTemplate.main.write(to: url.appendingPathComponent("main.cpp"), atomically: true, encoding: .utf8)
             case .python:
                 try PythonTemplate.main.write(to: url.appendingPathComponent("main.py"), atomically: true, encoding: .utf8)
-            case .twoObj, .catnip:
+            case .twoObj:
+                try TwooTemplate.main.write(to: url.appendingPathComponent("main.2o"), atomically: true, encoding: .utf8)
+            case .catnip:
                 break
             }
         } catch {

@@ -856,6 +856,10 @@ final class SettingsViewController: UITableViewController {
                 (SettingsStore.shared.settings.shellEnabled ? "Bật · " : "Tắt · ") + ShellChoice.current.displayName
             }, open: page(.shell)),
             Row(title: "C++ (Clang++)", symbol: "hammer", summary: { ClangToolchain.isInstalled ? "Đã cài" : "Chưa cài" }, open: page(.cpp)),
+            Row(title: "TwooLang (.2o)", symbol: "shippingbox", summary: {
+                let n = TwooLibraries.installed.count
+                return n == 0 ? "Thư viện nhúng sẵn" : "\(n) thư viện đã tải"
+            }, open: { nav in TwooLibraries.presentManager(from: nav?.topViewController) }),
             Row(title: "Định cú pháp (TextMate)", symbol: "chevron.left.forwardslash.chevron.right", summary: {
                 let n = GrammarStore.shared.grammars.count
                 return n == 0 ? "Chưa nhập" : "\(n) ngôn ngữ"

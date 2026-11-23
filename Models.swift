@@ -223,7 +223,7 @@ extension UIColor {
 
 enum Language: String, CaseIterable, Codable {
     case lua, javascript, html, css, json, python, swift, c, cpp, java, csharp, rust, go, shell, markdown, plaintext
-    case asm, fortran, php, ruby, sql, yaml, toml, dart
+    case asm, fortran, php, ruby, sql, yaml, toml, dart, twoo
 
     var displayName: String {
         switch self {
@@ -251,6 +251,7 @@ enum Language: String, CaseIterable, Codable {
         case .yaml:       return "YAML"
         case .toml:       return "TOML / INI"
         case .dart:       return "Dart"
+        case .twoo:       return "TwooLang"
         }
     }
 
@@ -280,6 +281,7 @@ enum Language: String, CaseIterable, Codable {
         case "yml","yaml":                       return .yaml
         case "toml","ini","cfg","conf","properties","editorconfig": return .toml
         case "dart":                             return .dart
+        case "2o":                               return .twoo
         case "pyw","pyi":                        return .python
         case "jsonc","json5":                    return .json
         default:                                 return .plaintext
@@ -450,7 +452,7 @@ enum SyntaxHighlighter {
             ]
         case .plaintext:
             return []
-        case .asm, .fortran, .php, .ruby, .sql, .yaml, .toml, .dart:
+        case .asm, .fortran, .php, .ruby, .sql, .yaml, .toml, .dart, .twoo:
             return moreRules(for: language)
         }
     }
