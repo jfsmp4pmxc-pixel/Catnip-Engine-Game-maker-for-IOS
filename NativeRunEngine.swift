@@ -28,7 +28,7 @@ enum NativeRunMode {
         switch self {
         case .cpp: return "C++ · "
         case .python: return "Python · "
-        case .twoo: return "TwooLang · "
+        case .twoo: return "C2o · "
         }
     }
 }

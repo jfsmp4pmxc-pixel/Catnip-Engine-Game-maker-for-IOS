@@ -1,4 +1,4 @@
-// TwooEngine.swift — chạy dự án TwooLang (.2o) native: trình biên dịch nhúng (TwooLang/) sinh ảnh arm64,
+// TwooEngine.swift — chạy dự án C2o (Catnip 2oLang, .2o) native: trình biên dịch nhúng (TwooLang/) sinh ảnh arm64,
 // rồi chạy ngay trong tiến trình app (JIT, cần quyền như Clang++). stdout/stderr/stdin qua pipe giống PythonEngine.
 // Chưa build/kiểm chứng trên thiết bị (backend arm64 đã được thử trên trình mô phỏng tools/a64emu.py).
 
@@ -77,7 +77,7 @@ extension TwooLibraries {
         let msg = "Thư viện nhúng sẵn: CioStyle.\n"
             + (have.isEmpty ? "Chưa tải thư viện nào." : "Đã tải: " + have.joined(separator: ", ") + ".")
             + "\nDùng trong code: #import <Tên>. Nguồn: github.com/Twoo-Studio/2oLang_Objs"
-        let ac = UIAlertController(title: "Thư viện TwooLang", message: msg, preferredStyle: .alert)
+        let ac = UIAlertController(title: "Thư viện C2o", message: msg, preferredStyle: .alert)
         ac.addAction(UIAlertAction(title: "Cập nhật", style: .default) { [weak vc] _ in
             let wait = UIAlertController(title: "Đang tải…", message: nil, preferredStyle: .alert)
             vc?.present(wait, animated: true)
@@ -130,7 +130,7 @@ final class TwooEngine {
     }
 
     func run(project: URL, onOutput: @escaping (String) -> Void, onFinish: @escaping (Result<Int32, Error>) -> Void) {
-        guard !running else { onFinish(.failure(ToolchainError("Một chương trình TwooLang đang chạy."))); return }
+        guard !running else { onFinish(.failure(ToolchainError("Một chương trình C2o đang chạy."))); return }
         guard let entry = Self.entryFile(in: project) else {
             onFinish(.failure(ToolchainError("Dự án chưa có file .2o (cần main.2o)."))); return
         }

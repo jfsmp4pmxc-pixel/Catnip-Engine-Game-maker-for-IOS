@@ -205,7 +205,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .love:    return "LÖVE"
         case .scratch: return "Scratch"
         case .python:  return "Python"
-        case .twoObj:  return "TwooLang"
+        case .twoObj:  return "C2o"
         case .catnip:  return "Catnip Engine"
         case .ui:      return "UI"
         case .cpp:     return "C++"
@@ -219,7 +219,7 @@ enum ProjectKind: String, Codable, CaseIterable {
         case .ui:      return "Giao diện SwiftUI, xem trước tương tác được"
         case .cpp:     return "C++ chạy bằng Clang++ trong app (CLI, console, SDL3)"
         case .python:  return "Python chạy trong shell iSH (CLI); đồ hoạ native đang làm"
-        case .twoObj:  return "TwooLang (.2o) biên dịch ra mã arm64 và chạy ngay trong app"
+        case .twoObj:  return "C2o (Catnip 2oLang, .2o) biên dịch ra mã arm64 và chạy ngay trong app"
         case .catnip:  return "Sắp ra mắt"
         }
     }
@@ -246,7 +246,7 @@ enum ProjectKind: String, Codable, CaseIterable {
 
 enum TwooTemplate {
     static let main = """
-    // Dự án TwooLang — bấm Chạy: biên dịch ra mã arm64 và chạy ngay trong app.
+    // Dự án C2o (Catnip 2oLang) — bấm Chạy: biên dịch ra mã arm64 và chạy ngay trong app.
     global {
     }
 

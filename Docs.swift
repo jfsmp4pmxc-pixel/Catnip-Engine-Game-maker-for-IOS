@@ -52,7 +52,7 @@ enum DocsCatalog {
         Topic(title: "Mẫu phác thảo, tra cứu",    file: "docs-22-mau-phac-thao",    symbol: "doc.text.magnifyingglass"),
         Topic(title: "Tô màu cú pháp, trình xem file", file: "docs-23-to-mau-trinh-xem", symbol: "photo.on.rectangle"),
         Topic(title: "Dự án C++ (Clang++)",       file: "docs-24-cpp",              symbol: "terminal"),
-        Topic(title: "Dự án TwooLang (.2o)",      file: "docs-25-twoolang",         symbol: "shippingbox")
+        Topic(title: "Dự án C2o (.2o)",      file: "docs-25-twoolang",         symbol: "shippingbox")
     ]
 
     static let officialWiki = URL(string: "https://love2d.org/wiki/Main_Page")!

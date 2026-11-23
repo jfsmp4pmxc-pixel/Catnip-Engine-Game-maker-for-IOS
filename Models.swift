@@ -251,7 +251,7 @@ enum Language: String, CaseIterable, Codable {
         case .yaml:       return "YAML"
         case .toml:       return "TOML / INI"
         case .dart:       return "Dart"
-        case .twoo:       return "TwooLang"
+        case .twoo:       return "C2o"
         }
     }
 

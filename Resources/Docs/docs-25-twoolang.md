@@ -1,6 +1,6 @@
-# Dự án TwooLang (.2o)
+# Dự án C2o (.2o)
 
-TwooLang là ngôn ngữ nhỏ do Twoo Studio viết. Trình biên dịch (C++17) đọc file `.2o` rồi **sinh thẳng mã máy**, không qua C hay assembler. Trong Catnip, bấm **Chạy**: app biên dịch `main.2o` ra mã **arm64** rồi chạy ngay trong chính tiến trình app (native, không giả lập), kết quả hiện trong terminal.
+C2o (Catnip 2oLang) là bản 2oLang tích hợp trong Catnip, file `.2o`. 2oLang là ngôn ngữ nhỏ do Twoo Studio viết. Trình biên dịch (C++17) đọc file `.2o` rồi **sinh thẳng mã máy**, không qua C hay assembler. Trong Catnip, bấm **Chạy**: app biên dịch `main.2o` ra mã **arm64** rồi chạy ngay trong chính tiến trình app (native, không giả lập), kết quả hiện trong terminal.
 
 ## Yêu cầu
 Giống Clang++: cần app có quyền JIT (cài bằng TrollStore, hoặc bật JIT qua SideStore/StikDebug). Nếu thiếu quyền, terminal báo rõ lý do.
@@ -25,7 +25,7 @@ entry {                          // điểm bắt đầu
 - `system.console.size`, `system.cursor.*`: terminal của Catnip báo kích thước cửa sổ thật.
 
 ## Thư viện
-`#import <CioStyle>` nạp thư viện nhúng sẵn. Thư viện khác tải từ kho `2oLang_Objs`: vào **Cài đặt → TwooLang (.2o) → Cập nhật**. File tải về lưu trong app; `#import <Tên>` tự tìm ở đó. `#import "file.2o"` nạp file của dự án.
+`#import <CioStyle>` nạp thư viện nhúng sẵn. Thư viện khác tải từ kho `2oLang_Objs`: vào **Cài đặt → C2o (.2o) → Cập nhật**. File tải về lưu trong app; `#import <Tên>` tự tìm ở đó. `#import "file.2o"` nạp file của dự án.
 
 ## Lỗi biên dịch
 Trình biên dịch báo toàn bộ lỗi một lượt, mỗi lỗi có `file:dòng:cột`, dòng mã và dấu `^`. Sửa từ trên xuống vì một lỗi có thể kéo theo lỗi phụ.
