@@ -21,7 +21,7 @@ entry {                          // điểm bắt đầu
 - `if / else if / else`, `while`, `break`, `continue`, `return`, `exit`.
 - `define ten(x) { return x * x; }` định nghĩa hàm; `obj` định nghĩa đối tượng (`public` / `private`).
 - `drive` là mảng, chỉ số tính từ 1: `drive(a).add("x")`, `drive(a).rm(1)`, `a[2]`.
-- Nhập: `ten = input;` đọc một dòng. Gõ vào ô nhập của terminal rồi Enter.
+- Nhập: `ten = input;` đọc một dòng. Gõ vào ô nhập của terminal rồi Enter. `if (input "help")` đọc một dòng rồi so. Trong chuỗi `if / else if` mà mọi điều kiện đều là `input "..."` thì cả chuỗi chỉ đọc **một** dòng và so lần lượt; các `if` rời nhau mỗi cái đọc một dòng riêng.
 - `system.console.size`, `system.cursor.*`: terminal của Catnip báo kích thước cửa sổ thật.
 
 ## Thư viện

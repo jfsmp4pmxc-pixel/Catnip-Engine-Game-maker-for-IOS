@@ -416,9 +416,36 @@ void Gen::emitStmt(const Stmt& s) {
         }
         case SK::If: {
             int end = as.newLabel();
+            // Chuỗi if / else if mà MỌI điều kiện đều là `input "..."` (từ hai điều kiện trở lên): chỉ đọc MỘT dòng
+            // cho cả chuỗi rồi so lần lượt, thay vì mỗi điều kiện đọc một dòng mới.
+            bool shared = s.conds.size() >= 2;
+            for (auto& c : s.conds)
+                if (c->k != EK::Input || c->a.size() != 1) shared = false;
+            uint32_t lineCell = 0;
+            if (shared) {
+                lineCell = dataAlloc(W);
+                callRt("rt_input_line", 0);
+                as.leaData(ECX, lineCell);
+                as.store(ECX, 0, EAX);
+            }
             for (size_t i = 0; i < s.conds.size(); i++) {
                 int next = as.newLabel();
-                guarded([&] { jumpIfFalse(*s.conds[i], next); });
+                if (shared) {
+                    guarded([&] {
+                        as.leaData(ECX, lineCell);
+                        as.load(EAX, ECX, 0);
+                        as.push(EAX);
+                        eval(*s.conds[i]->a[0]);
+                        as.push(EAX);
+                        callRt("rt_input_cmp", 2);
+                        as.push(EAX);
+                        callRt("rt_truthy", 1);
+                        as.test(EAX, EAX);
+                        as.jcc(CC_E, next);
+                    });
+                } else {
+                    guarded([&] { jumpIfFalse(*s.conds[i], next); });
+                }
                 emitBlock(s.blocks[i]);
                 as.jmp(end);
                 as.bind(next);

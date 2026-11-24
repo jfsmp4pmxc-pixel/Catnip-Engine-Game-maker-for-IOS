@@ -401,6 +401,11 @@ define rt_input_match(v) {
     return rt_bool(rt_compare(rt_input_line(), rt_tostr(v)) == 0)
 }
 
+// so một dòng đã đọc sẵn với v (dùng cho chuỗi if / else if toàn input "...": chỉ đọc một dòng cho cả chuỗi)
+define rt_input_cmp(line, v) {
+    return rt_bool(rt_compare(line, rt_tostr(v)) == 0)
+}
+
 // đọc một phím (hoặc tổ hợp phím) và so với dãy byte mong đợi
 define rt_input_key(seq) {
     old = rt_alloc(128)
