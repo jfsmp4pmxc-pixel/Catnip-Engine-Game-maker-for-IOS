@@ -202,7 +202,7 @@ final class GitHubAPI {
         throw Self.makeError(http, data)
     }
 
-    private static func makeError(_ http: HTTPURLResponse, _ data: Data) -> GHError {
+    fileprivate static func makeError(_ http: HTTPURLResponse, _ data: Data) -> GHError {
         var server = ""
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             server = (obj["message"] as? String) ?? ""
@@ -283,6 +283,37 @@ final class GitHubAPI {
     }
     func downloadArtifact(_ repo: String, id: Int) async throws -> Data {
         try await call("GET", "/repos/\(repo)/actions/artifacts/\(id)/zip")
+    }
+
+    /// Tải artifact (.zip) xuống file `dest`, báo tiến trình `(đã tải, tổng)` (byte).
+    /// `expected` là kích thước dự kiến (GitHub không luôn gửi Content-Length khi chuyển hướng).
+    /// Huỷ Task bao quanh thì huỷ luôn việc tải.
+    func downloadArtifact(_ repo: String, id: Int, to dest: URL, expected: Int64,
+                          progress: @escaping (Int64, Int64) -> Void) async throws {
+        guard let tok = GitHubKeychain.load() else { throw GHError("Chưa đăng nhập GitHub.", status: 401) }
+        guard let url = URL(string: base + "/repos/\(repo)/actions/artifacts/\(id)/zip") else {
+            throw GHError("Đường dẫn API không hợp lệ.")
+        }
+        var req = URLRequest(url: url)
+        req.setValue("Bearer \(tok)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        req.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+        req.setValue("CatnipEngine", forHTTPHeaderField: "User-Agent")
+
+        let loader = ArtifactDownloader(dest: dest, expected: expected, progress: progress)
+        let cfg = URLSessionConfiguration.default
+        cfg.timeoutIntervalForRequest = 60
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let session = URLSession(configuration: cfg, delegate: loader, delegateQueue: nil)
+        let task = session.downloadTask(with: req)
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
+                loader.start(task, c)
+            }
+        } onCancel: {
+            task.cancel()
+        }
+        session.finishTasksAndInvalidate()
     }
 
     // MARK: Workflows
@@ -719,5 +750,64 @@ enum WorkflowYAML {
             if x.type == "choice" && x.defaultValue.isEmpty { x.defaultValue = x.options.first ?? "" }
             return x
         }
+    }
+}
+
+
+// MARK: - Tải file có tiến trình
+
+private final class ArtifactDownloader: NSObject, URLSessionDownloadDelegate {
+    private let dest: URL
+    private let expected: Int64
+    private let progress: (Int64, Int64) -> Void
+    private var cont: CheckedContinuation<Void, Error>?
+    private let lock = NSLock()
+
+    init(dest: URL, expected: Int64, progress: @escaping (Int64, Int64) -> Void) {
+        self.dest = dest
+        self.expected = expected
+        self.progress = progress
+    }
+
+    func start(_ task: URLSessionDownloadTask, _ c: CheckedContinuation<Void, Error>) {
+        lock.lock(); cont = c; lock.unlock()
+        task.resume()
+    }
+
+    private func finish(_ result: Result<Void, Error>) {
+        lock.lock()
+        let c = cont
+        cont = nil
+        lock.unlock()
+        guard let c = c else { return }
+        switch result {
+        case .success: c.resume()
+        case .failure(let e): c.resume(throwing: e)
+        }
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : expected
+        progress(totalBytesWritten, total)
+    }
+
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        if let http = downloadTask.response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            let data = (try? Data(contentsOf: location)) ?? Data()
+            finish(.failure(GitHubAPI.makeError(http, data)))
+            return
+        }
+        do {
+            try? FileManager.default.removeItem(at: dest)
+            try FileManager.default.moveItem(at: location, to: dest)
+            finish(.success(()))
+        } catch {
+            finish(.failure(error))
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        if let error = error { finish(.failure(error)) }
     }
 }

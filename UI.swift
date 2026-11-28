@@ -205,23 +205,14 @@ final class ProjectListViewController: UIViewController {
     @objc private func shellTapped() { presentShell() }
 
     @objc private func addTapped() {
-        let sheet = UIAlertController(title: "Loại dự án", message: "Chọn loại cho dự án mới", preferredStyle: .actionSheet)
-        for kind in ProjectKind.allCases {
-            let title = kind.isAvailable ? "\(kind.displayName) — \(kind.summary)"
-                                         : "\(kind.displayName) (coming soon)"
-            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.askName(for: kind)
-            }
-            action.isEnabled = kind.isAvailable
-            sheet.addAction(action)
+        let picker = ProjectKindPickerViewController { [weak self] kind in
+            self?.askName(for: kind)
         }
-        sheet.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
-        sheet.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItem
-        present(sheet, animated: true)
+        present(CatnipNavigationController(rootViewController: picker), animated: true)
     }
 
     private func askName(for kind: ProjectKind) {
-        let note = kind == .love ? "Dự án LÖVE sẽ có sẵn main.lua và conf.lua." : "Dự án trống, bạn tự tạo file."
+        let note = kind == .scratch ? "Dự án trống, bạn tự tạo file." : "Dự án \(kind.displayName) sẽ có sẵn file mẫu để chạy thử."
         promptText(title: "Dự án \(kind.displayName) mới", message: note,
                    placeholder: "Tên dự án", confirm: "Tạo") { [weak self] name in
             guard let self = self else { return }
@@ -910,6 +901,77 @@ final class SettingsViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         rows[indexPath.row].open(navigationController)
+    }
+}
+
+// MARK: - Chọn loại dự án (điều hướng, giống Cài đặt)
+
+final class ProjectKindPickerViewController: UITableViewController {
+
+    private let onPick: (ProjectKind) -> Void
+    private var available: [ProjectKind] { ProjectKind.allCases.filter { $0.isAvailable } }
+    private var soon: [ProjectKind] { ProjectKind.allCases.filter { !$0.isAvailable } }
+
+    init(onPick: @escaping (ProjectKind) -> Void) {
+        self.onPick = onPick
+        super.init(style: .insetGrouped)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        title = "Loại dự án"
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .cancel, target: self, action: #selector(cancelTapped))
+        Appearance.style(navigationController)
+        tableView.backgroundColor = Appearance.theme.bgColor
+        tableView.separatorColor = Appearance.theme.borderColor
+    }
+
+    @objc private func cancelTapped() { dismiss(animated: true) }
+
+    private func kinds(_ section: Int) -> [ProjectKind] { section == 0 ? available : soon }
+
+    override func numberOfSections(in tableView: UITableView) -> Int { soon.isEmpty ? 1 : 2 }
+
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int { kinds(section).count }
+
+    override func tableView(_ tableView: UITableView, titleForHeaderInSection section: Int) -> String? {
+        section == 0 ? "Chọn loại cho dự án mới" : "Sắp ra mắt"
+    }
+
+    override func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
+        (view as? UITableViewHeaderFooterView)?.textLabel?.textColor = Appearance.theme.mutedColor
+    }
+
+    override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let t = Appearance.theme
+        let kind = kinds(indexPath.section)[indexPath.row]
+        let cell = UITableViewCell(style: .subtitle, reuseIdentifier: nil)
+        cell.backgroundColor = t.bg2Color
+        cell.textLabel?.text = kind.displayName
+        cell.textLabel?.font = .systemFont(ofSize: 16)
+        cell.detailTextLabel?.text = kind.isAvailable ? kind.summary : "Coming soon"
+        cell.detailTextLabel?.numberOfLines = 0
+        cell.detailTextLabel?.font = .systemFont(ofSize: 12)
+        cell.imageView?.image = UIImage(systemName: kind.symbol)
+        let on = kind.isAvailable
+        cell.textLabel?.textColor = on ? t.fgColor : t.mutedColor
+        cell.detailTextLabel?.textColor = t.mutedColor
+        cell.imageView?.tintColor = on ? t.accentColor : t.mutedColor
+        cell.accessoryType = on ? .disclosureIndicator : .none
+        cell.selectionStyle = on ? .default : .none
+        let sel = UIView(); sel.backgroundColor = t.hoverColor
+        cell.selectedBackgroundView = sel
+        return cell
+    }
+
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let kind = kinds(indexPath.section)[indexPath.row]
+        guard kind.isAvailable else { return }
+        let pick = onPick
+        dismiss(animated: true) { pick(kind) }
     }
 }
 

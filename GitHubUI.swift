@@ -1201,26 +1201,99 @@ final class GitHubRunDetailViewController: UITableViewController {
         }
     }
 
+    private var downloadTask: Task<Void, Never>?
+    private var banner: DownloadBanner?
+
     private func downloadArtifact(_ a: GHArtifact, from cell: UIView?) {
-        let spin = UIActivityIndicatorView(style: .medium)
-        spin.startAnimating()
-        let old = navigationItem.rightBarButtonItem
-        navigationItem.rightBarButtonItem = UIBarButtonItem(customView: spin)
-        Task { @MainActor in
-            defer { self.navigationItem.rightBarButtonItem = old }
+        guard downloadTask == nil else { return }
+        let bar = DownloadBanner()
+        bar.titleLabel.text = "Đang tải \(a.name).zip"
+        bar.update(done: 0, total: Int64(a.sizeInBytes))
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(bar)
+        NSLayoutConstraint.activate([
+            bar.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            bar.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            bar.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
+        ])
+        banner = bar
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("catnip-artifact-\(UUID().uuidString)", isDirectory: true)
+        let file = dir.appendingPathComponent(a.name + ".zip")
+        let repo = self.repo
+
+        downloadTask = Task { @MainActor in
+            defer {
+                self.banner?.removeFromSuperview()
+                self.banner = nil
+                self.downloadTask = nil
+            }
             do {
-                let data = try await GitHubAPI.shared.downloadArtifact(self.repo, id: a.id)
-                let dir = FileManager.default.temporaryDirectory.appendingPathComponent("catnip-artifact-\(UUID().uuidString)", isDirectory: true)
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-                let file = dir.appendingPathComponent(a.name + ".zip")
-                try data.write(to: file)
+                try await GitHubAPI.shared.downloadArtifact(repo, id: a.id, to: file, expected: Int64(a.sizeInBytes)) { done, total in
+                    DispatchQueue.main.async { self.banner?.update(done: done, total: total) }
+                }
                 let share = UIActivityViewController(activityItems: [file], applicationActivities: nil)
                 share.popoverPresentationController?.sourceView = cell ?? self.view
                 share.completionWithItemsHandler = { _, _, _, _ in try? FileManager.default.removeItem(at: dir) }
                 self.present(share, animated: true)
             } catch {
-                self.showError(error)
+                try? FileManager.default.removeItem(at: dir)
+                if (error as? URLError)?.code != .cancelled && !Task.isCancelled { self.showError(error) }
             }
+        }
+        bar.onCancel = { [weak self] in self?.downloadTask?.cancel() }
+    }
+}
+
+/// Thanh tiến trình tải xuống nổi ở đáy màn hình.
+final class DownloadBanner: UIView {
+    let titleLabel = UILabel()
+    private let detail = UILabel()
+    private let bar = UIProgressView(progressViewStyle: .default)
+    private let cancel = UIButton(type: .system)
+    var onCancel: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .secondarySystemBackground
+        layer.cornerRadius = 12
+        layer.shadowOpacity = 0.25
+        layer.shadowRadius = 8
+        layer.shadowOffset = CGSize(width: 0, height: 2)
+        titleLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        titleLabel.lineBreakMode = .byTruncatingMiddle
+        detail.font = .monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+        detail.textColor = .secondaryLabel
+        cancel.setTitle("Huỷ", for: .normal)
+        cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
+        cancel.setContentHuggingPriority(.required, for: .horizontal)
+        let top = UIStackView(arrangedSubviews: [titleLabel, cancel])
+        top.spacing = 8
+        let col = UIStackView(arrangedSubviews: [top, bar, detail])
+        col.axis = .vertical
+        col.spacing = 6
+        col.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(col)
+        NSLayoutConstraint.activate([
+            col.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            col.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -10),
+            col.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            col.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14)
+        ])
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    @objc private func cancelTapped() { onCancel?() }
+
+    func update(done: Int64, total: Int64) {
+        let f = ByteCountFormatter()
+        f.countStyle = .file
+        if total > 0 {
+            let frac = min(1, Float(done) / Float(total))
+            bar.setProgress(frac, animated: true)
+            detail.text = "\(f.string(fromByteCount: done)) / \(f.string(fromByteCount: total)) · \(Int(frac * 100))%"
+        } else {
+            detail.text = f.string(fromByteCount: done)
         }
     }
 }
@@ -1232,6 +1305,10 @@ final class GitHubLogViewController: UIViewController {
     private let job: GHJob
     private let textView = UITextView()
     private let spinner = UIActivityIndicatorView(style: .medium)
+    private let modeControl = UISegmentedControl(items: ["Đầy đủ", "Báo lỗi"])
+    private var fullText = ""
+    private var errorText = ""
+    private var errorCount = 0
 
     init(repo: String, job: GHJob) {
         self.repo = repo
@@ -1244,15 +1321,30 @@ final class GitHubLogViewController: UIViewController {
         super.viewDidLoad()
         title = job.name
         view.backgroundColor = .systemBackground
+        modeControl.selectedSegmentIndex = 0
+        modeControl.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+        modeControl.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(modeControl)
         textView.isEditable = false
         textView.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .regular)
         textView.alwaysBounceVertical = true
-        textView.frame = view.bounds
-        textView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        textView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(textView)
-        spinner.center = view.center
-        spinner.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        NSLayoutConstraint.activate([
+            modeControl.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            modeControl.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            modeControl.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            textView.topAnchor.constraint(equalTo: modeControl.bottomAnchor, constant: 8),
+            textView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            textView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        spinner.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(spinner)
+        NSLayoutConstraint.activate([
+            spinner.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            spinner.centerYAnchor.constraint(equalTo: view.centerYAnchor)
+        ])
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(barButtonSystemItem: .refresh, target: self, action: #selector(reload)),
             UIBarButtonItem(barButtonSystemItem: .action, target: self, action: #selector(shareLog)),
@@ -1260,25 +1352,105 @@ final class GitHubLogViewController: UIViewController {
         reload()
     }
 
+    /// Nội dung đang hiển thị: log đầy đủ hoặc chỉ các dòng báo lỗi.
+    private var showingErrors: Bool { modeControl.selectedSegmentIndex == 1 }
+
+    @objc private func modeChanged() { render(scrollToEnd: !showingErrors) }
+
     @objc private func shareLog() {
-        let share = UIActivityViewController(activityItems: [textView.text ?? ""], applicationActivities: nil)
+        // Chia sẻ luôn bản đầy đủ (không bị cắt) hoặc bản lỗi tuỳ chế độ.
+        let text = showingErrors ? errorText : fullText
+        let name = job.name.replacingOccurrences(of: "/", with: "-") + (showingErrors ? "-errors.txt" : "-log.txt")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+        var items: [Any] = [text]
+        if (try? text.write(to: url, atomically: true, encoding: .utf8)) != nil { items = [url] }
+        let share = UIActivityViewController(activityItems: items, applicationActivities: nil)
         share.popoverPresentationController?.barButtonItem = navigationItem.rightBarButtonItems?.last
         present(share, animated: true)
+    }
+
+    private func render(scrollToEnd: Bool) {
+        modeControl.setTitle(errorCount > 0 ? "Báo lỗi (\(errorCount))" : "Báo lỗi", forSegmentAt: 1)
+        if showingErrors {
+            textView.text = errorText.isEmpty ? "Không thấy dòng báo lỗi nào trong log này." : errorText
+            textView.setContentOffset(.zero, animated: false)
+        } else {
+            // UITextView chịu được khoảng 1,5 triệu ký tự; log dài hơn chỉ cắt phần hiển thị
+            // (nút chia sẻ vẫn xuất đủ).
+            let limit = 1_500_000
+            if fullText.count > limit {
+                textView.text = "… (hiển thị \(limit) ký tự cuối, chia sẻ để lấy đủ log)\n" + String(fullText.suffix(limit))
+            } else {
+                textView.text = fullText.isEmpty ? "(Log trống hoặc chưa có. Job đang chạy thì thử tải lại sau.)" : fullText
+            }
+            if scrollToEnd {
+                let end = (textView.text as NSString).length
+                textView.scrollRangeToVisible(NSRange(location: max(0, end - 1), length: 1))
+            }
+        }
     }
 
     @objc private func reload() {
         spinner.startAnimating()
         Task { @MainActor in
             do {
-                var text = try await GitHubAPI.shared.jobLog(self.repo, job: self.job.id)
-                if text.utf8.count > 400_000 { text = "… (đã cắt bớt phần đầu)\n" + String(text.suffix(400_000)) }
-                self.textView.text = text.isEmpty ? "(Log trống hoặc chưa có. Job đang chạy thì thử tải lại sau.)" : text
-                let end = (self.textView.text as NSString).length
-                self.textView.scrollRangeToVisible(NSRange(location: max(0, end - 1), length: 1))
+                self.fullText = try await GitHubAPI.shared.jobLog(self.repo, job: self.job.id)
+                let r = GitHubLogFilter.errors(in: self.fullText)
+                self.errorText = r.text
+                self.errorCount = r.count
+                self.render(scrollToEnd: true)
+                // Có lỗi thì mở thẳng tab báo lỗi cho tiện (người dùng vẫn bấm "Đầy đủ" được).
+                if r.count > 0 && self.job.conclusion == "failure" && !self.showingErrors && !self.autoSwitched {
+                    self.autoSwitched = true
+                    self.modeControl.selectedSegmentIndex = 1
+                    self.render(scrollToEnd: false)
+                }
             } catch {
-                self.textView.text = "Không tải được log: \(error.localizedDescription)"
+                self.fullText = "Không tải được log: \(error.localizedDescription)"
+                self.errorText = ""
+                self.errorCount = 0
+                self.render(scrollToEnd: false)
             }
             self.spinner.stopAnimating()
         }
+    }
+    private var autoSwitched = false
+}
+
+/// Lọc các dòng báo lỗi từ log GitHub Actions (kèm vài dòng ngữ cảnh phía sau).
+enum GitHubLogFilter {
+    private static let pattern = try! NSRegularExpression(pattern:
+        #"##\[error\]|\berror:|\bfatal error\b|\bfatal:|\bFAILED\b|\bfailed\b|Process completed with exit code [1-9]|undefined (reference|symbol)|\bld: |\*\* BUILD FAILED \*\*|Traceback \(most recent call last\)|\bException\b|\bError:|command not found|No such file or directory|\bERROR\b|\bcrash"#)
+    private static let stamp = try! NSRegularExpression(pattern: #"^\d{4}-\d\d-\d\dT[\d:.]+Z "#)
+
+    private static func clean(_ line: Substring) -> String {
+        let s = String(line)
+        let r = NSRange(location: 0, length: (s as NSString).length)
+        if let m = stamp.firstMatch(in: s, range: r) { return (s as NSString).substring(from: m.range.length) }
+        return s
+    }
+
+    static func errors(in log: String) -> (text: String, count: Int) {
+        let lines = log.split(separator: "\n", omittingEmptySubsequences: false)
+        var out: [String] = []
+        var count = 0
+        var keepUntil = -1          // chỉ số dòng cuối của ngữ cảnh đang giữ
+        var lastShown = -2
+        for (i, line) in lines.enumerated() {
+            let c = clean(line)
+            let ns = c as NSString
+            let hit = pattern.firstMatch(in: c, range: NSRange(location: 0, length: ns.length)) != nil
+                && !c.contains("continue-on-error") && !c.contains("0 errors")
+            if hit {
+                count += 1
+                keepUntil = i + 3
+            }
+            if i <= keepUntil {
+                if lastShown >= 0 && i != lastShown + 1 { out.append("⋯") }
+                out.append(c)
+                lastShown = i
+            }
+        }
+        return (out.joined(separator: "\n"), count)
     }
 }
